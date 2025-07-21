@@ -1,9 +1,6 @@
 ### IMPORTS ###
 
-from collections import defaultdict, deque
-import math
-import os
-import random
+from collections import deque
 
 ### UTILITY FUNCTIONS ###
 
@@ -145,7 +142,7 @@ def display_boards(board_hash_list):
 ### MAIN FUNCTIONS ###
 
 # Computes all possible piece placements given board and piece.
-# Returns a list of all possible boards.
+# Returns a list of all possible boards, with their finesse
 # Assume 100g.
 # board_hash is the hash of the input board.
 # piece is the next piece.
@@ -175,6 +172,9 @@ def get_next_boards(board_hash, piece):
   queue = deque()
   queue.append((y, 1, 0))
   visited = set()
+  # current state -> (previous state, keypress list)
+  previous = {}
+  previous[(y, 1, 0)] = (None, ())
   
   # BFS on all possible ending locations for piece, assuming 100g
   while len(queue) > 0:
@@ -184,7 +184,7 @@ def get_next_boards(board_hash, piece):
       (y, x, rotation) = current
       
       # test movement
-      for x_move in (-1, 1):
+      for (x_move, x_finesse) in ((-1, "moveLeft"), (1, "moveRight")):
         new_y_offset = 1
         good = True
         while good:
@@ -196,10 +196,16 @@ def get_next_boards(board_hash, piece):
               new_y_offset += 1
               break
         if new_y_offset <= 0:
-          queue.append((y + new_y_offset, x + x_move, rotation))
+          newState = (y + new_y_offset, x + x_move, rotation)
+          queue.append(newState)
+          if newState not in previous:
+            if new_y_offset < 0:
+              previous[newState] = (current, (x_finesse, "softDrop"))
+            else:
+              previous[newState] = (current, (x_finesse,))
       
       # test rotation
-      for rotation_move in (1, 2, 3):
+      for (rotation_move, rotation_finesse) in ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")):
         new_rotation = (rotation + rotation_move) % 4
         for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
           new_y_position = kick_offset_y + y
@@ -212,6 +218,7 @@ def get_next_boards(board_hash, piece):
               break
           if good:
             # gravity
+            original_y_position = new_y_position
             while good:
               new_y_position -= 1
               for (offset_y, offset_x) in PIECES[piece][new_rotation]:
@@ -220,12 +227,20 @@ def get_next_boards(board_hash, piece):
                   good = False
                   new_y_position += 1
                   break
-            queue.append((new_y_position, new_x_position, new_rotation))
+            newState = (new_y_position, new_x_position, new_rotation)
+            queue.append(newState)
+            if newState not in previous:
+              if original_y_position != new_y_position:
+                previous[newState] = (current, (rotation_finesse, "softDrop"))
+              else:
+                previous[newState] = (current, (rotation_finesse,))
             break
   
   # Obtain board states
-  boards = set()
+  # board_hash -> finesse
+  boards = {}
   for (y, x, rotation) in visited:
+    
     new_hash = board_hash
     for (offset_y, offset_x) in PIECES[piece][rotation]:
       new_hash += 2**(4 * (y + offset_y) + x + offset_x)
@@ -233,10 +248,20 @@ def get_next_boards(board_hash, piece):
     
     # Remove completed lines
     cleared_board = [_ for _ in new_board if 0 in _]
+
+    # Compute finesse
+    finesse_groups = []
+    current_state = (y, x, rotation)
+    while current_state != None:
+      (current_state, finesse_group) = previous[current_state]
+      finesse_groups.append(finesse_group)
+    finesse = []
+    for finesse_group in reversed(finesse_groups):
+      finesse += finesse_group
     
-    boards.add(hash_board(cleared_board))
+    boards[hash_board(cleared_board)] = finesse
   
-  return sorted(boards)
+  return boards
 
 # Computes all possible board states at the end of the given queue.
 # board_hash is the hash of the input board.
@@ -246,7 +271,7 @@ def get_next_boards_given_queue(board_hash, queue):
   for piece in queue:
     new_boards = set()
     for board in boards:
-      new_boards = new_boards.union(set(get_next_boards(board, piece)))
+      new_boards = new_boards.union(set(get_next_boards(board, piece).keys()))
     boards = new_boards
   return sorted(boards)
 
@@ -319,409 +344,3 @@ def get_previous_boards_given_queue(board_hash, queue):
       prev_boards = prev_boards.union(set(get_previous_boards(board, piece, forwards_saved_transitions)))
     boards = prev_boards
   return sorted(boards)
-
-# Computes best next board state for board state sequence
-# that results in the fewest non line clears
-# if len(queue) - 1 pieces are placed
-# Among those, the one with the fewest minos
-# Returns the piece used and the next board hash
-def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache = {}):
-  BREAKS_LIMIT = 2  # ignore anything with more than BREAKS_LIMIT breaks
-  for max_breaks in range(BREAKS_LIMIT+1):
-    # (hold, board_state) -> set of (hold, queue_index, ending_board_state)
-    immediate_placements = {}
-    # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
-    reversed_immediate_placements = {}
-    # (hold, queue_index, board_state) -> combo breaks
-    least_breaks = {}
-    # Track what we have explored.
-    states_considered = set()
-
-    # Cache the next boards. (board_hash, piece) -> reachable boards
-    saved_next_boards = transition_cache
-    def _cached_get_next_boards(_board_hash, _piece):
-      if (_board_hash, _piece) not in saved_next_boards:
-        saved_next_boards[(_board_hash, _piece)] = get_next_boards(_board_hash, _piece)
-      return saved_next_boards[(_board_hash, _piece)]
-
-    # (hold, queue_index, board_state)
-    continuation_queue = deque()
-    continuation_queue.append((queue[0], 1, board_hash))
-    least_breaks[(queue[0], 1, board_hash)] = 0
-
-    # BFS to see all ending states
-    while len(continuation_queue) > 0:
-      current_state = continuation_queue.popleft()
-      (hold, queue_index, current_board_hash) = current_state
-      current_mino_count = num_minos(current_board_hash)
-      current_num_breaks = least_breaks[current_state]
-
-      # Test not using hold, then using hold piece
-      for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-        for next_board_hash in _cached_get_next_boards(current_board_hash, next_used):
-          next_state = (next_hold, queue_index + 1, next_board_hash)
-
-          # Update break counts
-          next_mino_count = num_minos(next_board_hash)
-          next_num_breaks = current_num_breaks + (next_mino_count > current_mino_count)
-          if next_state not in least_breaks or next_num_breaks < least_breaks[next_state]:
-            least_breaks[next_state] = next_num_breaks
-            # Make sure we only add possible origin placements if the number of breaks along the way is the same
-            # We do this by resetting reversed_immediate_placements[next_state]
-            if queue_index >= 2:
-              reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-          
-          # Add next states to queue
-          if least_breaks[next_state] <= max_breaks:
-            # Initialize immediate_placements and reversed_immediate_placements
-            (next_hold, next_queue_index, next_board_hash) = next_state
-            if next_queue_index == 2:
-              immediate_placements[(next_hold, next_board_hash)] = set()
-              reversed_immediate_placements[next_state] = set(((next_hold, next_board_hash),))
-            
-            # Update reversed_immediate_placements
-            if next_queue_index >= 3:
-              if next_state not in reversed_immediate_placements:
-                reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-              elif next_num_breaks == least_breaks[next_state]:
-                reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
-
-            # Actually add next states to queue
-            if next_state not in states_considered:
-              if queue_index + 1 < len(queue):
-                states_considered.add(next_state)
-                continuation_queue.append(next_state)
-
-    # Do foresight
-    # (hold, queue_index, board_state) -> set of accommodated next pieces
-    accommodated = {}
-    if foresight > 0:
-      for final_state in least_breaks:
-        accommodated[final_state] = set()
-        # todo! for every queue test queue
-        # ignore hold
-        # after determining what queues work
-        # for each instance where the hold appears, can replace with any piece
-        # do dp to figure out what queues work
-        (hold, queue_index, final_hash) = final_state
-        current_mino_count = num_minos(final_hash)
-
-        # Consider hold piece
-        board_hash_list = _cached_get_next_boards(final_hash, hold)
-        for next_board_hash in board_hash_list:
-          if num_minos(next_board_hash) <= current_mino_count:
-            for piece in PIECES:
-              accommodated[final_state].add(piece)
-            break
-        
-        # Consider each possible next piece
-        if len(accommodated[final_state]) == 0:
-          for piece in PIECES:
-            board_hash_list = _cached_get_next_boards(final_hash, piece)
-            for next_board_hash in board_hash_list:
-              if num_minos(next_board_hash) <= current_mino_count:
-                accommodated[final_state].add(piece)
-                break
-
-    # fill in immediate_placements
-    for ending_state in reversed_immediate_placements:
-      queue_index = ending_state[1]
-      if queue_index == len(queue):
-        for immediate_placement in reversed_immediate_placements[ending_state]:
-          immediate_placements[immediate_placement].add(ending_state)
-
-    # compute scores and return answer. Lower scores are better.
-    # Score is 1000 * 10**foresight * expected number of breaks
-    # We add 1000 for each unaccommodated next combination
-    # We also add number based on future mino count to score
-    # based on distance from 9, 10, 11, 12 minos
-
-    best_end_state = None
-    best_score = len(queue) * 1000000 * 10**foresight
-    for state in immediate_placements:
-      score = best_score + 1
-
-      if foresight == 0:
-        for end_state in immediate_placements[state]:
-          # num breaks portion
-          temp_score = least_breaks[end_state] * 1000 * 10**foresight
-          # mino count portion
-          temp_score += max(0, abs(2*num_minos(end_state[2]) - 21) - 3)//2
-          # update best end score
-          score = min(temp_score, score)
-      
-      # handle foresight
-      else:
-        max_num_breaks = 0
-        
-        # best mino score of anything that accommodates a queue
-        currently_accommodated = {}
-
-        for max_num_breaks in range(max_breaks, max_breaks + 2):
-          for end_state in immediate_placements[state]:
-            if least_breaks[end_state] == max_num_breaks:
-              mino_score = max(0, abs(2*num_minos(end_state[2]) - 21) - 3)//2
-              #mino_score = max(0, abs(num_minos(end_state[2]) - 42))
-              for accommodated_queue in accommodated[end_state]:
-                if accommodated_queue not in currently_accommodated:
-                  currently_accommodated[accommodated_queue] = mino_score
-                elif mino_score < currently_accommodated[accommodated_queue]:
-                  currently_accommodated[accommodated_queue] = mino_score
-          if len(currently_accommodated) > 0:
-            break
-        
-        # num breaks portion
-        score = max_num_breaks * 1000 * 10**foresight
-        # We add 1000 for each unaccommodated next piece
-        score += (7**foresight - len(currently_accommodated)) * 1000
-        # mino count portion
-        score += (10*sum(currently_accommodated.values()))//len(currently_accommodated)
-      
-      if score < best_score:
-        best_score = score
-        best_end_state = state
-
-    if best_end_state != None:
-      print(f'Given {queue}, best is hold {best_end_state}, score {best_score}')
-      display_board(best_end_state[1])
-      return best_end_state
-  
-  # bot kinda screwed so just pick the last thing it was thinking of
-  best_end_state = state
-  print("FK", flush = True)
-  print(f'Given {queue}, best is hold {best_end_state}, score {best_score}')
-  display_board(best_end_state[1])
-  return best_end_state
-
-# Computes best combo continuation
-# if len(queue) - lookahead pieces are placed
-# using lookahead previews and foresight prediction
-# if finish is true, will attempt to place an additional lookahead - 1 pieces
-# (may have suspicious placements at the end)
-def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 0, finish = True):
-  combo = []
-  current_hash = board_hash
-  hold = queue[0]
-  window = queue[1:lookahead+1]
-
-  for decision_num in range(len(queue) - 1):
-    # compute next state
-    next_state = get_best_next_combo_state(current_hash, hold + window, foresight)
-    (hold, current_hash) = next_state
-    combo.append(next_state)
-
-    # compute next window
-    if decision_num < len(queue) - lookahead - 1:
-      window = window[1:]+queue[decision_num+lookahead+1]
-    elif not finish:
-      # no need to finish the queue off
-      break
-    else:
-      window = window[1:]
-    
-  return combo
-
-# inf ds simulator
-# simulation_length is number of pieces to simulate
-def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well_height = 8):
-  def _piece_list():
-    pieces = list(PIECES.keys())
-    index = len(pieces)
-    while True:
-      if index == len(pieces):
-        random.shuffle(pieces)
-        index = 0
-      yield pieces[index]
-      index += 1
-  pieces = _piece_list()
-  combo = []
-  combos = []
-
-  # initialize game state
-  max_hash = 0
-  current_hash = 0
-  current_minos = 0
-  hold = next(pieces)
-  window = ""
-  for _ in range(lookahead):
-    window += next(pieces)
-  current_combo = 0
-
-  # precompute garbage wells
-  well_multiplier = (16**well_height - 1)//15
-  wells = [row_code * well_multiplier for row_code in [7, 11, 13, 14]]
-
-  tc = {}
-
-  for decision_num in range(simulation_length):
-    # compute next state
-    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, transition_cache=tc)
-    (hold, current_hash) = next_state
-    combo.append(next_state)
-
-    # compute next window
-    window = window[1:] + next(pieces)
-
-    # handle combo logic
-    minos = num_minos(current_hash)
-    if minos <= current_minos:
-      current_combo += 1
-      current_minos = minos
-    else:
-      combos.append(current_combo)
-      current_combo = 0
-      current_minos = minos + 3 * well_height
-
-      # add garbage!!!
-      current_hash = current_hash * (16**well_height) + wells[random.randint(0, 3)]
-    max_hash = max(max_hash, current_hash)
-    if max_hash > 16**32:
-      print("DEAD")
-      break
-  combos.append(current_combo)
-  print(combos)
-  height = 0
-  while max_hash > 0:
-    max_hash //= 16
-    height += 1
-  print(height)
-  return combo
-
-# Generate all PC queues for any possible queue
-# Reads from output file if one exists.
-# Otherwise, saves to output file because this is gonna take FOREVER.
-# filename is the name of the file to output to, or read from.
-# n is the length of the queue.
-# h is the max height an intermediate board state can be.
-# override, if true, will generate a new file even if one already exists.
-# add_board_states, if true, will add the hashes of the board states after each queue.
-def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_states = False):
-  if not override and os.path.isfile(filename):
-    ifil = open(filename, 'r')
-    N = int(ifil.readline().strip())
-    if not add_board_states:
-      pcs = [ifil.readline().strip() for _ in range(N)]
-    else:
-      pcs = {}
-      for _ in range(N):
-        line = ifil.readline().strip().split("|")
-        pcs[line[0]] = list(map(int, line[1:]))
-    ifil.close()
-    return pcs
-  
-  h = min(n, h)
-  pcs = set()
-  
-  max_board = 2**(4*h) - 1  # max hash
-  
-  # Optimization: use BFS forwards and backwards
-  n_backwards = n//4 + 1
-  n_forwards = n - n_backwards
-  
-  # Backwards direction
-  backwards_queue = deque()
-  backwards_queue.append((0, ""))  # (board_hash, history)
-  backwards_reachable_states = defaultdict(set)  # board_hash -> queue_set
-  backwards_saved_transitions = {}  # (board_hash, piece) -> next_board_list
-  forwards_saved_transitions = {}  # (board_hash, piece) -> next_board_list
-  
-  visited = set()
-  while len(backwards_queue) > 0:
-    current = backwards_queue.popleft()
-    if current not in visited:
-      visited.add(current)
-      (board_hash, history) = current
-      
-      # Check each possible next piece
-      for piece in PIECES:
-        new_history = piece + history
-        if (board_hash, piece) not in backwards_saved_transitions:
-          backwards_saved_transitions[(board_hash, piece)] = get_previous_boards(board_hash, piece, forwards_saved_transitions)
-        for previous_board in backwards_saved_transitions[(board_hash, piece)]:
-          # Track reachable board states
-          if previous_board != 0 and previous_board < max_board:
-            backwards_reachable_states[previous_board].add(new_history)
-            if len(new_history) < n_backwards:
-              backwards_queue.append((previous_board, new_history))
-  
-  # Forwards direction
-  forwards_queue = deque()
-  forwards_queue.append((0, ""))  # (board_hash, history)
-  forwards_reachable_states = defaultdict(set)  # board_hash -> queue_set
-  
-  visited = set()
-  while len(forwards_queue) > 0:
-    current = forwards_queue.popleft()
-    if current not in visited:
-      visited.add(current)
-      (board_hash, history) = current
-      
-      # Check each possible next piece
-      for piece in PIECES:
-        new_history = history + piece
-        if (board_hash, piece) not in forwards_saved_transitions:
-          forwards_saved_transitions[(board_hash, piece)] = get_next_boards(board_hash, piece)
-        for next_board in forwards_saved_transitions[(board_hash, piece)]:
-          # Track reachable board states
-          if next_board < max_board and next_board != 0:
-            if next_board in backwards_reachable_states:
-              forwards_reachable_states[next_board].add(new_history)
-            if len(new_history) < n_forwards:
-              forwards_queue.append((next_board, new_history))
-  
-  # Merge forwards and backwards
-  for board_hash in forwards_reachable_states:
-    if board_hash in backwards_reachable_states:
-      for first_half in forwards_reachable_states[board_hash]:
-        for second_half in backwards_reachable_states[board_hash]:
-          pcs.add(first_half + second_half)
-  
-  pcs.add("I")  # Edge case
-  
-  # Save to output file
-  ofil = open(filename, 'w')
-  pcs = sorted(pcs, key = lambda pc: (len(pc), pc))
-  ofil.write(str(len(pcs)) + "\n")
-  ofil.write("\n".join(pcs))
-  ofil.close()
-  return pcs
-
-# Determines the set of saves for a given pc queue ("X" if no save), given set of pcs.
-# piece_queue is a string containing the next pieces.
-# pcs is the set of all pc queues to consider.
-def get_pc_saves(piece_queue, pcs):
-  saves = {}
-  for queue_order in get_queue_orders(piece_queue):
-    if queue_order[:-1] in pcs:
-      saves[queue_order[-1]] = queue_order[:-1]
-    if queue_order in pcs:
-      saves["X"] = queue_order
-  return saves
-
-# Computes the maximum number of pcs that can be obtained in a queue.
-# piece_queue is a string containing the next pieces.
-def max_pcs_in_queue(piece_queue):
-  pcs = set(generate_all_pc_queues(PC_QUEUES_FILENAME))  # set of all pcs
-  max_n = len(max(pcs, key = lambda _:len(_)))  # longest pc
-  piece_queue = piece_queue + "X"  # terminator character
-  dp = {(1, piece_queue[0]): (0, None, None)}  # (index, hold piece) -> (num pcs, previous state, previous solve)
-  for index in range(1, len(piece_queue)):
-    for hold in PIECES:
-      current_state = (index, hold)
-      if current_state in dp:
-        for pieces_used in range(1, min(len(piece_queue) + 1 - index, max_n + 1)):
-          pc_queue = hold + piece_queue[index:index + pieces_used]
-          saves = get_pc_saves(pc_queue, pcs)
-          for save in saves:
-            next_state = (index + pieces_used, save)
-            if next_state not in dp or dp[current_state][0] + 1 > dp[next_state][0]:
-              dp[next_state] = (dp[current_state][0] + 1, current_state, saves[save])
-  (max_pcs, current_state, prev_solve) = max(dp.values())
-  if max_pcs == 0:
-    return (0, [])
-  reversed_history = [prev_solve,]
-  while dp[current_state][2] != None:
-    reversed_history.append(dp[current_state][2])
-    current_state = dp[current_state][1]
-  history = list(reversed(reversed_history))
-  return (max_pcs, history)

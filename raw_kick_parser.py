@@ -43,4 +43,3 @@ for piece in kicks:
             ofil.write(f"{len(kicks[piece][rotate][rotate2])}\n")
             ofil.write("; ".join([f"{y}, {x}" for (y, x) in kicks[piece][rotate][rotate2]]) + "\n")
 ofil.close()
-return kicks
