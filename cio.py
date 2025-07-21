@@ -19,4 +19,4 @@ if hold == '':
     queue = queue[1] + queue[0] + queue[2:]
 
 o = get_best_next_combo_state(board_hash, hold + queue, foresight)
-# print(o)
+# print(o, file=sys.stderr)
