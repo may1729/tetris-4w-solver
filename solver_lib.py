@@ -259,7 +259,11 @@ def get_next_boards(board_hash, piece):
     for finesse_group in reversed(finesse_groups):
       finesse += finesse_group
     
-    boards[hash_board(cleared_board)] = finesse
+    cleared_board_hash = hash_board(cleared_board)
+    if cleared_board_hash not in boards:
+      boards[cleared_board_hash] = finesse
+    elif len(finesse) < len(boards[cleared_board_hash]):
+      boards[cleared_board_hash] = finesse
   
   return boards
 
