@@ -181,9 +181,10 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
     used = queue[1]
     finesse_list.append("hold")
   finesse_list += _cached_get_next_boards(board_hash, used)[end_hash]
-  print(f'Given {queue}, best is use {used}, score {best_score}')
-  print(f'Finesse list: {finesse_list}')
-  solver_lib.display_board(end_hash)
+  # print(f'Given {queue}, best is use {used}, score {best_score}')
+  fl = ','.join(finesse_list);
+  print(f'{fl}')
+  # solver_lib.display_board(end_hash)
   return best_end_state
 
 # Computes best combo continuation

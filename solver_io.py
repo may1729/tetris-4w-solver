@@ -1,6 +1,7 @@
 # minacode :oyes:
 
-from solver_lib import get_best_next_combo_state, hash_board
+from combo_lib import get_best_next_combo_state
+from solver_lib import hash_board
 import sys
 
 a = sys.argv
@@ -15,4 +16,4 @@ hold = a[3]
 foresight = int(a[5])
 
 o = get_best_next_combo_state(board_hash, hold + queue, foresight)
-print(o)
+# print(o)
