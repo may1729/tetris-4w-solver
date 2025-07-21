@@ -184,6 +184,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
   # print(f'Given {queue}, best is use {used}, score {best_score}')
   # print(f'Finesse list: {finesse_list}')
   print(",".join(finesse_list))
+  # solver_lib.display_board(board_hash)
   # solver_lib.display_board(end_hash)
   return best_end_state
 

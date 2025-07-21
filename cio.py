@@ -15,5 +15,9 @@ queue = a[2][:vision]
 hold = '' if a[3] == '_' else a[3]
 foresight = int(a[5])
 
+if hold == '':
+    queue = queue[1] + queue[0] + queue[2:]
+
+print(hold+queue);
 o = get_best_next_combo_state(board_hash, hold + queue, foresight)
 # print(o)
