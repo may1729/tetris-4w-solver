@@ -172,7 +172,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
   if best_end_state == None:
     # bot kinda screwed so just pick the last thing it was thinking of
     best_end_state = state
-    print("FK", flush = True)
+    # print("FK", flush = True)
   
   (end_hold, end_hash) = best_end_state
   finesse_list = []
@@ -181,7 +181,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
     used = queue[0]
     finesse_list.append("hold")
   finesse_list += _cached_get_next_boards(board_hash, used)[end_hash]
-  # print(f'Given {queue}, best is use {used}, score {best_score}')
+  print(f'{used}')
   # print(f'Finesse list: {finesse_list}')
   print(",".join(finesse_list))
   # solver_lib.display_board(board_hash)
