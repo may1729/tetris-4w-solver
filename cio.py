@@ -1,7 +1,7 @@
 # minacode :oyes:
 
 from combo_lib import get_best_next_combo_state
-from solver_lib import hash_board
+from solver_lib import hash_board, unhash_states
 import sys
 
 a = sys.argv
@@ -15,8 +15,10 @@ queue = a[2][:vision]
 hold = '' if a[3] == '_' else a[3]
 foresight = int(a[5])
 
+tc = {} if 6 >= len(a) else unhash_states(a[6])
+
 if hold == '':
     queue = queue[1] + queue[0] + queue[2:]
 
-o = get_best_next_combo_state(board_hash, hold + queue, foresight)
+o = get_best_next_combo_state(board_hash, hold + queue, foresight, tc)
 # print(o, file=sys.stderr)

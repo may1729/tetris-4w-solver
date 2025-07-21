@@ -349,3 +349,31 @@ def get_previous_boards_given_queue(board_hash, queue):
       prev_boards = prev_boards.union(set(get_previous_boards(board, piece, forwards_saved_transitions)))
     boards = prev_boards
   return sorted(boards)
+
+# key: (board, piece); value: { [board]: finesse }
+def hash_states(d):
+  s = '';
+  
+  for board, piece in d:
+    i = '';
+    for k in d[(board, piece)]:
+      i += str(k) + ":" + ",".join(d[(board, piece)][k]) + ";"
+    s += f'{board}&{piece}={i}/'
+  
+  return s.strip()
+
+def unhash_states(s: str):
+  d = {}
+  for line in s.split("/"):
+    if line.strip() == "": continue
+    (key, value) = line.split("=")
+    (board, piece) = key.split("&")
+    i = {}
+    for ln in value.split(";"):
+      if ln.strip() == "": continue
+      (k,v) = ln.split(":")
+      i[k] = v.split(",")
+    d[(board, piece)] = i
+  
+  return d
+  
