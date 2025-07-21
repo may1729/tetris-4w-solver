@@ -15,14 +15,8 @@ queue = a[2][:vision]
 hold = '' if a[3] == '_' else a[3]
 foresight = int(a[5])
 
-try:
-    ile = open('data/transition_cache', 'r')
-    tc = unhash_states(ile.read())
-except:
-    tc = {}
-
 if hold == '':
     queue = queue[1] + queue[0] + queue[2:]
 
-o = get_best_next_combo_state(board_hash, hold + queue, foresight, tc)
+o = get_best_next_combo_state(board_hash, hold + queue, foresight)
 # print(o, file=sys.stderr)
