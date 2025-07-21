@@ -12,7 +12,7 @@ board_hash = hash_board(board)
 
 vision = int(a[4])
 queue = a[2][:vision]
-hold = a[3]
+hold = '' if a[3] == '_' else a[3]
 foresight = int(a[5])
 
 o = get_best_next_combo_state(board_hash, hold + queue, foresight)
