@@ -15,7 +15,11 @@ queue = a[2][:vision]
 hold = '' if a[3] == '_' else a[3]
 foresight = int(a[5])
 
-tc = {} if 6 >= len(a) else unhash_states(a[6])
+try:
+    ile = open('data/transition_cache', 'r')
+    tc = unhash_states(ile.read())
+except:
+    tc = {}
 
 if hold == '':
     queue = queue[1] + queue[0] + queue[2:]
