@@ -4,14 +4,24 @@ import solver_lib
 
 from collections import deque
 import random
+import time
 
 # Computes best next board state for board state sequence
 # that results in the fewest non line clears
 # if len(queue) - 1 pieces are placed
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
-def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache = {}):
+def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache = {}, foresight_cache = {}):
   BREAKS_LIMIT = 2  # ignore anything with more than BREAKS_LIMIT breaks
+
+  # Cache the next boards. (board_hash, piece, no_breaks) -> reachable boards
+  saved_next_boards = transition_cache
+  def _cached_get_next_boards(_board_hash, _piece, _max_breaks):
+    _no_breaks = (_max_breaks == 0)
+    if (_board_hash, _piece, _no_breaks) not in saved_next_boards:
+      saved_next_boards[(_board_hash, _piece, _no_breaks)] = solver_lib.get_next_boards(_board_hash, _piece, _no_breaks)
+    return saved_next_boards[(_board_hash, _piece, _no_breaks)]
+
   for max_breaks in range(BREAKS_LIMIT+1):
     # (hold, board_state) -> set of (hold, queue_index, ending_board_state)
     immediate_placements = {}
@@ -21,13 +31,6 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
     least_breaks = {}
     # Track what we have explored.
     states_considered = set()
-
-    # Cache the next boards. (board_hash, piece) -> reachable boards
-    saved_next_boards = transition_cache
-    def _cached_get_next_boards(_board_hash, _piece):
-      if (_board_hash, _piece) not in saved_next_boards:
-        saved_next_boards[(_board_hash, _piece)] = solver_lib.get_next_boards(_board_hash, _piece)
-      return saved_next_boards[(_board_hash, _piece)]
 
     # (hold, queue_index, board_state)
     continuation_queue = deque()
@@ -43,7 +46,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
 
       # Test not using hold, then using hold piece
       for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-        for next_board_hash in _cached_get_next_boards(current_board_hash, next_used):
+        for next_board_hash in _cached_get_next_boards(current_board_hash, next_used, max_breaks):
           next_state = (next_hold, queue_index + 1, next_board_hash)
 
           # Update break counts
@@ -108,7 +111,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
             (foresight_queue_index, foresight_board_hash) = current_state
             current_mino_count = solver_lib.num_minos(foresight_board_hash)
 
-            for next_board_hash in _cached_get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index]):
+            for next_board_hash in _cached_get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index], 0):
               next_state = (foresight_queue_index + 1, next_board_hash)
               next_mino_count = solver_lib.num_minos(next_board_hash)
               if solver_lib.num_minos(next_board_hash) <= current_mino_count:
@@ -122,7 +125,9 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
         # compute accommodated scores
         for foresight_queue in foresight_scores:
           if foresight_scores[foresight_queue] != 1000:
-            for input_queue in solver_lib.get_input_queues_for_output_sequence(foresight_queue, hold):
+            if (foresight_queue, hold) not in foresight_cache:
+              foresight_cache[(foresight_queue, hold)] = list(solver_lib.get_input_queues_for_output_sequence(foresight_queue, hold))
+            for input_queue in foresight_cache[(foresight_queue, hold)]:
               if input_queue not in accommodated[final_state]:
                 accommodated[final_state][input_queue] = foresight_scores[foresight_queue]
               elif foresight_scores[foresight_queue] < accommodated[final_state][input_queue]:
@@ -191,18 +196,10 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
   if end_hold != queue[0]:
     used = queue[0]
     finesse_list.append("hold")
-  finesse_list += _cached_get_next_boards(board_hash, used)[end_hash]
-  z=','.join(finesse_list)
-  print(f'{used} {z}')
-  # print(f'Finesse list: {finesse_list}')
-  
-  # h = solver_lib.hash_states(transition_cache);
-  # t = solver_lib.unhash_states(h);
-  # ile = open('data/transition_cache', 'w');
-  # ile.write(h);
-  # print(t)
-  # solver_lib.display_board(board_hash)
-  # solver_lib.display_board(end_hash)
+  finesse_list += _cached_get_next_boards(board_hash, used, max_breaks)[end_hash]
+  # output for bot
+  print(f"{used} {','.join(finesse_list)}")
+
   return best_end_state
 
 # Computes best combo continuation
@@ -264,10 +261,13 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well
   wells = [row_code * well_multiplier for row_code in [7, 11, 13, 14]]
 
   tc = {}
+  fc = {}
 
   for decision_num in range(simulation_length):
     # compute next state
-    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, transition_cache=tc)
+    time_start = time.time()
+    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, transition_cache=tc, foresight_cache=fc)
+    time_elapsed = time.time() - time_start
     (hold, current_hash) = next_state
     combo.append(next_state)
 
@@ -289,7 +289,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well
     
     # display board and game state
     solver_lib.display_board(current_hash)
-    print(f"Combo: {current_combo}")
+    print(f"Combo: {current_combo}, time = {round(time_elapsed, 4)}")
 
     max_hash = max(max_hash, current_hash)
     if max_hash > 16**32:

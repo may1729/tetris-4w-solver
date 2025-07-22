@@ -171,10 +171,11 @@ def get_input_queues_for_output_sequence(target, hold):
 
 # Computes all possible piece placements given board and piece.
 # Returns a list of all possible boards, with their finesse
+# If no_breaks is True, then only returns placements that do not break combo
 # Assume 100g.
 # board_hash is the hash of the input board.
 # piece is the next piece.
-def get_next_boards(board_hash, piece):
+def get_next_boards(board_hash, piece, no_breaks = False):
   
   # Obtain board
   board = unhash_board(board_hash)
@@ -274,24 +275,26 @@ def get_next_boards(board_hash, piece):
       new_hash += 2**(4 * (y + offset_y) + x + offset_x)
     new_board = unhash_board(new_hash)
     
-    # Remove completed lines
+    # Remove completed lines and check for breaks
     cleared_board = [_ for _ in new_board if 0 in _]
+    kept_combo = len(cleared_board) != len(new_board)
 
     # Compute finesse
-    finesse_groups = []
-    current_state = (y, x, rotation)
-    while current_state != None:
-      (current_state, finesse_group) = previous[current_state]
-      finesse_groups.append(finesse_group)
-    finesse = []
-    for finesse_group in reversed(finesse_groups):
-      finesse += finesse_group
-    
-    cleared_board_hash = hash_board(cleared_board)
-    if cleared_board_hash not in boards:
-      boards[cleared_board_hash] = finesse
-    elif len(finesse) < len(boards[cleared_board_hash]):
-      boards[cleared_board_hash] = finesse
+    if not no_breaks or kept_combo:
+      finesse_groups = []
+      current_state = (y, x, rotation)
+      while current_state != None:
+        (current_state, finesse_group) = previous[current_state]
+        finesse_groups.append(finesse_group)
+      finesse = []
+      for finesse_group in reversed(finesse_groups):
+        finesse += finesse_group
+      
+      cleared_board_hash = hash_board(cleared_board)
+      if cleared_board_hash not in boards:
+        boards[cleared_board_hash] = finesse
+      elif len(finesse) < len(boards[cleared_board_hash]):
+        boards[cleared_board_hash] = finesse
   
   return boards
 
