@@ -22,11 +22,12 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
       saved_next_boards[(_board_hash, _piece, _no_breaks)] = solver_lib.get_next_boards(_board_hash, _piece, _no_breaks)
     return saved_next_boards[(_board_hash, _piece, _no_breaks)]
 
+  # (hold, board_state) -> set of (hold, queue_index, ending_board_state)
+  immediate_placements = {}
+  # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
+  reversed_immediate_placements = {}
+  
   for max_breaks in range(BREAKS_LIMIT+1):
-    # (hold, board_state) -> set of (hold, queue_index, ending_board_state)
-    immediate_placements = {}
-    # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
-    reversed_immediate_placements = {}
     # (hold, queue_index, board_state) -> combo breaks
     least_breaks = {}
     # Track what we have explored.
