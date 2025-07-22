@@ -1,12 +1,14 @@
 # minacode :oyes:
 import json
 from combo_lib import get_best_next_combo_state
-from solver_lib import hash_board, unhash_states, hash_states
+from solver_lib import hash_board, save_transition_cache, load_transition_cache
 
 tc = {}
+TC_FILE = "data/tc"
 
 try:
-    pass # todo: this
+    tc = load_transition_cache(TC_FILE)
+    print(f"Sample: {tc[list(tc.keys())[0]]}")
 except:
     pass
 #
@@ -36,7 +38,7 @@ def f(line: str):
 while True:
     line = input()
     if line == "ex":
-        pass # todo: this
+        save_transition_cache(tc, TC_FILE)
     else:
         f(line)
         

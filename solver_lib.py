@@ -1,6 +1,7 @@
 ### IMPORTS ###
 
 from collections import deque
+import pickle
 import sys
 
 ### UTILITY FUNCTIONS ###
@@ -380,30 +381,43 @@ def get_previous_boards_given_queue(board_hash, queue):
     boards = prev_boards
   return sorted(boards)
 
-# key: (board, piece); value: { [board]: finesse }
-def hash_states(d):
-  s = '';
-  
-  for board, piece in d:
-    i = '';
-    for k in d[(board, piece)]:
-      i += str(k) + ":" + ",".join(d[(board, piece)][k]) + ";"
-    s += f'{board}&{piece}={i}/'
-  
-  return s.strip()
+# saves transition_cache to pickle
+def save_transition_cache(transition_cache, filename):
+  output_file = open(filename, 'w')
+  pickle.dump(transition_cache, output_file)
+  output_file.close()
 
-def unhash_states(s: str):
-  d = {}
-  for line in s.split("/"):
-    if line.strip() == "": continue
-    (key, value) = line.split("=")
-    (board, piece) = key.split("&")
-    i = {}
-    for ln in value.split(";"):
-      if ln.strip() == "": continue
-      (k,v) = ln.split(":")
-      i[k] = v.split(",")
-    d[(board, piece)] = i
+# load transition_cache from pickle
+def load_transition_cache(filename):
+  input_file = open(filename, 'r')
+  transition_cache = pickle.load(input_file)
+  input_file.close()
+  return transition_cache
+
+# # key: (board, piece); value: { [board]: finesse }
+# def hash_states(d):
+#   s = '';
   
-  return d
+#   for board, piece in d:
+#     i = '';
+#     for k in d[(board, piece)]:
+#       i += str(k) + ":" + ",".join(d[(board, piece)][k]) + ";"
+#     s += f'{board}&{piece}={i}/'
+  
+#   return s.strip()
+
+# def unhash_states(s: str):
+#   d = {}
+#   for line in s.split("/"):
+#     if line.strip() == "": continue
+#     (key, value) = line.split("=")
+#     (board, piece) = key.split("&")
+#     i = {}
+#     for ln in value.split(";"):
+#       if ln.strip() == "": continue
+#       (k,v) = ln.split(":")
+#       i[k] = v.split(",")
+#     d[(board, piece)] = i
+  
+#   return d
   
