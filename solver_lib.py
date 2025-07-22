@@ -116,6 +116,15 @@ def lines_to_insert(board_height, max_lines):
     else:
       yield ()
 
+# Obtains all queues (ignoring bag structure) of length n
+def all_queues(queue_length):
+  if queue_length <= 0:
+    yield ""
+  else:
+    for piece in PIECES:
+      for queue in all_queues(queue_length-1):
+        yield queue + piece
+
 # Obtains all possible ways to play a queue given one hold.
 def get_queue_orders(queue):
   if len(queue) == 1:
@@ -139,6 +148,23 @@ def display_boards(board_hash_list):
   for board_hash in board_hash_list:
     display_board(board_hash)
     print()
+
+# Score a mino count
+# This is based on distance from 9, 10, 11, 12 minos
+def score_num_minos(mino_count):
+  return max(0, abs(2*mino_count - 21) - 3)//2
+
+# Obtains queues that with the given hold could place the specified pieces
+def get_input_queues_for_output_sequence(target, hold):
+  if len(target) == 0:
+    yield ""
+  elif target[0] == hold:
+    for piece in PIECES:
+      for queue in get_input_queues_for_output_sequence(target[1:], piece):
+        yield piece + queue
+  else:
+    for queue in get_input_queues_for_output_sequence(target[1:], hold):
+      yield target[0] + queue
 
 ### MAIN FUNCTIONS ###
 

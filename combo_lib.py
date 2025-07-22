@@ -77,43 +77,56 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
                 states_considered.add(next_state)
                 continuation_queue.append(next_state)
 
-    # Do foresight
-    # (hold, queue_index, board_state) -> set of accommodated next pieces
-    accommodated = {}
-    if foresight > 0:
-      for final_state in least_breaks:
-        accommodated[final_state] = set()
-        # todo! for every queue test queue
-        # ignore hold
-        # after determining what queues work
-        # for each instance where the hold appears, can replace with any piece
-        # do dp to figure out what queues work
-        (hold, queue_index, final_hash) = final_state
-        current_mino_count = solver_lib.num_minos(final_hash)
-
-        # Consider hold piece
-        board_hash_list = _cached_get_next_boards(final_hash, hold)
-        for next_board_hash in board_hash_list:
-          if solver_lib.num_minos(next_board_hash) <= current_mino_count:
-            for piece in solver_lib.PIECES:
-              accommodated[final_state].add(piece)
-            break
-        
-        # Consider each possible next piece
-        if len(accommodated[final_state]) == 0:
-          for piece in solver_lib.PIECES:
-            board_hash_list = _cached_get_next_boards(final_hash, piece)
-            for next_board_hash in board_hash_list:
-              if solver_lib.num_minos(next_board_hash) <= current_mino_count:
-                accommodated[final_state].add(piece)
-                break
-
     # fill in immediate_placements
     for ending_state in reversed_immediate_placements:
       queue_index = ending_state[1]
       if queue_index == len(queue):
         for immediate_placement in reversed_immediate_placements[ending_state]:
           immediate_placements[immediate_placement].add(ending_state)
+
+    # Do foresight
+    # (hold, queue_index, board_state) -> {set of accommodated next queues -> mino score}
+    accommodated = {}
+    if foresight > 0:
+      for final_state in least_breaks:
+        (hold, queue_index, final_hash) = final_state
+        current_mino_count = solver_lib.num_minos(final_hash)
+        accommodated[final_state] = {}
+        # foresight queue -> best score
+        foresight_scores = {}
+        for foresight_queue in solver_lib.all_queues(foresight):
+          foresight_scores[foresight_queue] = 1000
+
+          # (foresight_queue_index, foresight_board_hash)
+          foresight_continuation_queue = deque()
+          foresight_continuation_queue.append((0, final_hash))
+
+          # bfs on all ending states that do not break
+          # no need to account for hold
+          while len(foresight_continuation_queue) > 0:
+            current_state = foresight_continuation_queue.popleft()
+            (foresight_queue_index, foresight_board_hash) = current_state
+            current_mino_count = solver_lib.num_minos(foresight_board_hash)
+
+            for next_board_hash in _cached_get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index]):
+              next_state = (foresight_queue_index + 1, next_board_hash)
+              next_mino_count = solver_lib.num_minos(next_board_hash)
+              if solver_lib.num_minos(next_board_hash) <= current_mino_count:
+                if foresight_queue_index == foresight - 1:
+                  # scoring
+                  foresight_scores[foresight_queue] = min(foresight_scores[foresight_queue], solver_lib.score_num_minos(next_mino_count))
+                else:
+                  # add to bfs queue
+                  foresight_continuation_queue.append(next_state)
+        
+        # compute accommodated scores
+        for foresight_queue in foresight_scores:
+          if foresight_scores[foresight_queue] != 1000:
+            for input_queue in solver_lib.get_input_queues_for_output_sequence(foresight_queue, hold):
+              if input_queue not in accommodated[final_state]:
+                accommodated[final_state][input_queue] = foresight_scores[foresight_queue]
+              elif foresight_scores[foresight_queue] < accommodated[final_state][input_queue]:
+                accommodated[final_state][input_queue] = foresight_scores[foresight_queue]
 
     # compute scores and return answer. Lower scores are better.
     # Score is 1000 * 10**foresight * expected number of breaks
@@ -131,7 +144,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
           # num breaks portion
           temp_score = least_breaks[end_state] * 1000 * 10**foresight
           # mino count portion
-          temp_score += max(0, abs(2*solver_lib.num_minos(end_state[2]) - 21) - 3)//2
+          temp_score += solver_lib.score_num_minos(solver_lib.num_minos(end_state[2]))
           # update best end score
           score = min(temp_score, score)
       
@@ -145,13 +158,11 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
         for max_num_breaks in range(max_breaks, max_breaks + 2):
           for end_state in immediate_placements[state]:
             if least_breaks[end_state] == max_num_breaks:
-              mino_score = max(0, abs(2*solver_lib.num_minos(end_state[2]) - 21) - 3)//2
-              #mino_score = max(0, abs(num_minos(end_state[2]) - 42))
               for accommodated_queue in accommodated[end_state]:
                 if accommodated_queue not in currently_accommodated:
-                  currently_accommodated[accommodated_queue] = mino_score
-                elif mino_score < currently_accommodated[accommodated_queue]:
-                  currently_accommodated[accommodated_queue] = mino_score
+                  currently_accommodated[accommodated_queue] = accommodated[end_state][accommodated_queue]
+                elif accommodated[end_state][accommodated_queue] < currently_accommodated[accommodated_queue]:
+                  currently_accommodated[accommodated_queue] = accommodated[end_state][accommodated_queue]
           if len(currently_accommodated) > 0:
             break
         
@@ -275,6 +286,11 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well
 
       # add garbage!!!
       current_hash = current_hash * (16**well_height) + wells[random.randint(0, 3)]
+    
+    # display board and game state
+    solver_lib.display_board(current_hash)
+    print(f"Combo: {current_combo}")
+
     max_hash = max(max_hash, current_hash)
     if max_hash > 16**32:
       print("DEAD")
