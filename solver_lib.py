@@ -383,13 +383,13 @@ def get_previous_boards_given_queue(board_hash, queue):
 
 # saves transition_cache to pickle
 def save_transition_cache(transition_cache, filename):
-  output_file = open(filename, 'w')
+  output_file = open(filename, 'wb')
   pickle.dump(transition_cache, output_file)
   output_file.close()
 
 # load transition_cache from pickle
 def load_transition_cache(filename):
-  input_file = open(filename, 'r')
+  input_file = open(filename, 'rb')
   transition_cache = pickle.load(input_file)
   input_file.close()
   return transition_cache

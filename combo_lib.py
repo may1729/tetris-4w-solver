@@ -26,7 +26,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
   immediate_placements = {}
   # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
   reversed_immediate_placements = {}
-  
+
   for max_breaks in range(BREAKS_LIMIT+1):
     # (hold, queue_index, board_state) -> combo breaks
     least_breaks = {}
@@ -233,7 +233,7 @@ def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 0,
 
 # inf ds simulator
 # simulation_length is number of pieces to simulate
-def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well_height = 8):
+def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well_height = 8, tc_cache_filename = None):
   def _piece_list():
     pieces = list(solver_lib.PIECES.keys())
     index = len(pieces)
@@ -263,6 +263,11 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well
 
   tc = {}
   fc = {}
+  
+  if tc_cache_filename != None:
+    tc = solver_lib.load_transition_cache(tc_cache_filename)
+    key = list(tc.keys())[0]
+    print(key, tc[key])
 
   for decision_num in range(simulation_length):
     # compute next state
@@ -303,4 +308,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well
     max_hash //= 16
     height += 1
   print(height)
+
+  solver_lib.save_transition_cache(tc, tc_cache_filename)
+
   return combo
