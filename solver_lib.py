@@ -150,9 +150,10 @@ def display_boards(board_hash_list):
     print()
 
 # Score a mino count
-# This is based on distance from 9, 10, 11, 12 minos
+# This is based on distance from 6, 9, 12, 15 minos
 def score_num_minos(mino_count):
-  return max(0, abs(2*mino_count - 21) - 3)//2
+  target = [12, 9, 6, 15][mino_count % 4]
+  return abs(mino_count - target)
 
 # Obtains queues that with the given hold could place the specified pieces
 def get_input_queues_for_output_sequence(target, hold):
