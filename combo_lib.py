@@ -176,7 +176,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
         # We add 1000 for each unaccommodated next piece
         score += (7**foresight - len(currently_accommodated)) * 1000
         # mino count portion
-        score += (10*sum(currently_accommodated.values()))//max(1, len(currently_accommodated))
+        score += sum(currently_accommodated.values())
       
       if score < best_score:
         best_score = score
