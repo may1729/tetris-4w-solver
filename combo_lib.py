@@ -181,9 +181,9 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
     used = queue[0]
     finesse_list.append("hold")
   finesse_list += _cached_get_next_boards(board_hash, used)[end_hash]
-  print(f'{used}')
+  z=','.join(finesse_list)
+  print(f'{used} {z}')
   # print(f'Finesse list: {finesse_list}')
-  print(",".join(finesse_list))
   
   # h = solver_lib.hash_states(transition_cache);
   # t = solver_lib.unhash_states(h);
@@ -192,7 +192,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
   # print(t)
   # solver_lib.display_board(board_hash)
   # solver_lib.display_board(end_hash)
-  return best_end_state
+  return (best_end_state, transition_cache)
 
 # Computes best combo continuation
 # if len(queue) - lookahead pieces are placed

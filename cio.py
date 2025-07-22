@@ -2,21 +2,35 @@
 
 from combo_lib import get_best_next_combo_state
 from solver_lib import hash_board, unhash_states
-import sys
 
-a = sys.argv
+tc = {}
+#
+def f(line: str):
+    global tc
+    a = line.split(" ")
+    # print(a)
+    board = list(reversed([[1 if c == 'X' else 0 for c in row] for row in a[0].split('|')]))
+    board_hash = hash_board(board)
+    
+    # print(board_hash)
 
-# board, queue, hold, vision, foresight
-board = list(reversed([[1 if c == 'X' else 0 for c in row] for row in a[1].split('|')]))
-board_hash = hash_board(board)
+    vision = int(a[3])
+    queue = a[1][:vision]
+    hold = '' if a[2] == '_' else a[2]
+    foresight = int(a[4])
 
-vision = int(a[4])
-queue = a[2][:vision]
-hold = '' if a[3] == '_' else a[3]
-foresight = int(a[5])
+    if hold == '':
+        queue = queue[1] + queue[0] + queue[2:]
+        
+    # print(f'{board} {queue}')
 
-if hold == '':
-    queue = queue[1] + queue[0] + queue[2:]
+    o = get_best_next_combo_state(board_hash, hold + queue, foresight, tc)
+    tc = o[1]
+    # print(f'stored {o}')
+    return;
 
-o = get_best_next_combo_state(board_hash, hold + queue, foresight)
-# print(o, file=sys.stderr)
+while True:
+    line = input()
+    f(line)
+        
+
