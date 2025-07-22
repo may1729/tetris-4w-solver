@@ -24,8 +24,7 @@ def f(line: str):
         
     # print(f'{board} {queue}')
 
-    o = get_best_next_combo_state(board_hash, hold + queue, foresight, tc)
-    tc = o[1]
+    get_best_next_combo_state(board_hash, hold + queue, foresight, tc)
     # print(f'stored {o}')
     return;
 
