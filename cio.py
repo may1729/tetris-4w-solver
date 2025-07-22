@@ -1,9 +1,14 @@
 # minacode :oyes:
-
+import json
 from combo_lib import get_best_next_combo_state
-from solver_lib import hash_board, unhash_states
+from solver_lib import hash_board, unhash_states, hash_states
 
 tc = {}
+
+try:
+    pass # todo: this
+except:
+    pass
 #
 def f(line: str):
     global tc
@@ -30,6 +35,8 @@ def f(line: str):
 
 while True:
     line = input()
-    f(line)
+    if line == "ex":
+        pass # todo: this
+    else:
+        f(line)
         
-
