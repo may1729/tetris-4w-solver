@@ -8,7 +8,7 @@ TC_FILE = "data/tc"
 
 try:
     tc = load_transition_cache(TC_FILE)
-    print(f"Sample: {tc[list(tc.keys())[0]]}")
+    # print(f"Sample: {tc[list(tc.keys())[0]]}")
 except:
     pass
 #
@@ -29,9 +29,11 @@ def f(line: str):
     if hold == '':
         queue = queue[1] + queue[0] + queue[2:]
         
+    can180 = bool(int(a[5]))
+        
     # print(f'{board} {queue}')
 
-    get_best_next_combo_state(board_hash, hold + queue, foresight, tc)
+    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, tc)
     # print(f'stored {o}')
     return;
 
@@ -39,6 +41,7 @@ while True:
     line = input()
     if line == "ex":
         save_transition_cache(tc, TC_FILE)
+        print("ok")
     else:
         f(line)
         

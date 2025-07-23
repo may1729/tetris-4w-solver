@@ -176,7 +176,7 @@ def get_input_queues_for_output_sequence(target, hold):
 # Assume 100g.
 # board_hash is the hash of the input board.
 # piece is the next piece.
-def get_next_boards(board_hash, piece, no_breaks = False):
+def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
   
   # Obtain board
   board = unhash_board(board_hash)
@@ -234,8 +234,9 @@ def get_next_boards(board_hash, piece, no_breaks = False):
             else:
               previous[newState] = (current, (x_finesse,))
       
+      vv = ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")) if can180 else ((1, "rotateCW"), (3, "rotateCCW"))
       # test rotation
-      for (rotation_move, rotation_finesse) in ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")):
+      for (rotation_move, rotation_finesse) in vv:
         new_rotation = (rotation + rotation_move) % 4
         for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
           new_y_position = kick_offset_y + y
