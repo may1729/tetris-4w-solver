@@ -8,7 +8,6 @@ TC_FILE = "data/tc"
 
 try:
     tc = load_transition_cache(TC_FILE)
-    print(f"Sample: {tc[list(tc.keys())[0]]}")
 except:
     pass
 #

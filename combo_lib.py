@@ -26,10 +26,11 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
   immediate_placements = {}
   # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
   reversed_immediate_placements = {}
+  # (hold, queue_index, board_state) -> combo breaks
+  least_breaks = {}
 
   for max_breaks in range(BREAKS_LIMIT+1):
-    # (hold, queue_index, board_state) -> combo breaks
-    least_breaks = {}
+    
     # Track what we have explored.
     states_considered = set()
 
@@ -37,6 +38,14 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
     continuation_queue = deque()
     continuation_queue.append((queue[0], 1, board_hash))
     least_breaks[(queue[0], 1, board_hash)] = 0
+
+    # todo: if max_breaks is nonzero, then:
+    # we know that any sequence with n+1 breaks will be a sequence of n breaks, a break, then a sequence with 0 breaks
+    # this lets us use the much faster 0 break function
+    # this should be a good speedup
+    # this also lets us use our previously calculated stuff.
+    # however, after this fix the rest of the speedup should come from smarter algorithm on the foresight section
+    # but this is also important to do. eventually. may will now go back to her sudoku :oyes:
 
     # BFS to see all ending states
     while len(continuation_queue) > 0:
@@ -90,10 +99,14 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
 
     # Do foresight
     # (hold, queue_index, board_state) -> {set of accommodated next queues -> mino score}
+    # it is almost certainly here that needs to be optimized
+    # there is a ton of overlap over the 7^foresight queues checked per final state
     accommodated = {}
     if foresight > 0:
       for final_state in least_breaks:
         (hold, queue_index, final_hash) = final_state
+        if queue_index != len(queue):
+          continue
         current_mino_count = solver_lib.num_minos(final_hash)
         accommodated[final_state] = {}
         # foresight queue -> best score
@@ -138,7 +151,6 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
     # Score is 1000 * 10**foresight * expected number of breaks
     # We add 1000 for each unaccommodated next combination
     # We also add number based on future mino count to score
-    # based on distance from 9, 10, 11, 12 minos
 
     best_end_state = None
     best_score = len(queue) * 1000000 * 10**foresight
@@ -208,7 +220,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, transition_cache
 # using lookahead previews and foresight prediction
 # if finish is true, will attempt to place an additional lookahead - 1 pieces
 # (may have suspicious placements at the end)
-def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 0, finish = True):
+def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 1, finish = True):
   combo = []
   current_hash = board_hash
   hold = queue[0]
@@ -233,7 +245,7 @@ def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 0,
 
 # inf ds simulator
 # simulation_length is number of pieces to simulate
-def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well_height = 8, tc_cache_filename = None):
+def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well_height = 8, tc_cache_filename = None, starting_state = 0):
   def _piece_list():
     pieces = list(solver_lib.PIECES.keys())
     index = len(pieces)
@@ -249,7 +261,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 0, well
 
   # initialize game state
   max_hash = 0
-  current_hash = 0
+  current_hash = starting_state
   current_minos = 0
   hold = next(pieces)
   window = ""
