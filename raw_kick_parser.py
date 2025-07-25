@@ -1,7 +1,9 @@
 # parse kick data from copying contents of https://kick.rqft.workers.dev/srsx
 
+kicktable = "srsx"
+
 kicks = {}
-ifil = open("data/raw_kicks.txt", 'r')
+ifil = open(f"data/raw_kicks_{kicktable}.txt", 'r')
 for _p in range(7):
     piece = ifil.readline().strip().split()[-1]
     counter = -1
@@ -35,7 +37,7 @@ for _p in range(7):
             ifil.readline()
 ifil.close()
 
-ofil = open("data/kicks.txt", "w")
+ofil = open(f"data/kicks_{kicktable}.txt", "w")
 for piece in kicks:
     ofil.write(piece + "\n")
     for rotate in range(4):
