@@ -2,7 +2,7 @@
 
 import solver_lib
 
-from collections import deque
+from collections import defaultdict, deque
 import random
 import time
 
@@ -16,8 +16,8 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, t
 
   # Cache the next boards. (board_hash, piece, no_breaks) -> reachable boards
   saved_next_boards = transition_cache
-  def _cached_get_next_boards(_board_hash, _piece, _max_breaks, can180):
-    _no_breaks = (_max_breaks == 0)
+  def _cached_get_next_boards(_board_hash, _piece, _num_breaks, can180):
+    _no_breaks = (_num_breaks == 0)
     if (_board_hash, _piece, _no_breaks, can180) not in saved_next_boards:
       saved_next_boards[(_board_hash, _piece, _no_breaks, can180)] = solver_lib.get_next_boards(_board_hash, _piece, _no_breaks, can180)
     return saved_next_boards[(_board_hash, _piece, _no_breaks, can180)]
@@ -34,61 +34,85 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, t
     # Track what we have explored.
     states_considered = set()
 
-    # (hold, queue_index, board_state)
-    continuation_queue = deque()
-    continuation_queue.append((queue[0], 1, board_hash))
-    least_breaks[(queue[0], 1, board_hash)] = 0
+    # queue_index -> list of (hold, board_state)
+    continuation_queues = defaultdict(list)
 
-    # todo: if max_breaks is nonzero, then:
-    # we know that any sequence with n+1 breaks will be a sequence of n breaks, a break, then a sequence with 0 breaks
-    # this lets us use the much faster 0 break function
-    # this should be a good speedup
-    # this also lets us use our previously calculated stuff.
-    # however, after this fix the rest of the speedup should come from smarter algorithm on the foresight section
-    # but this is also important to do. eventually. may will now go back to her sudoku :oyes:
+    # make max_breaks > 0 faster by using results from max_breaks - 1
+    new_least_breaks_set = set()
+    if max_breaks == 0:
+      continuation_queues[1].append((queue[0], board_hash))
+      least_breaks[(queue[0], 1, board_hash)] = 0
+    else:
+      for state in least_breaks:
+        (hold, queue_index, board_state) = state
+        # Test not using hold, then using hold piece
+        current_mino_count = solver_lib.num_minos(board_state)
+        for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
+          for next_board_hash in _cached_get_next_boards(board_state, next_used, 1, can180):
+            # only allow breaks
+            next_state = (next_hold, queue_index + 1, next_board_hash)
+            immediate_placement_state = (next_hold, next_board_hash)
+            if solver_lib.num_minos(next_board_hash) > current_mino_count and next_state not in least_breaks:
+              new_least_breaks_set.add(next_state)
+              # guaranteed to not be over index because if it was then we found a continuation
+              continuation_queues[queue_index + 1].append(immediate_placement_state)
+
+              # initialize immediate_placements and reversed_immediate_placements
+              if queue_index == 1:
+                if next_state not in reversed_immediate_placements:
+                  reversed_immediate_placements[next_state] = set((immediate_placement_state,))
+                if immediate_placement_state not in immediate_placements:
+                  immediate_placements[immediate_placement_state] = set()
+              
+              # Update reversed_immediate_placements
+              if queue_index >= 2:
+                if next_state not in reversed_immediate_placements:
+                  reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
+                elif next_state in new_least_breaks_set:
+                  reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
+
+
+      # add states in new_least_breaks_set to least_breaks
+      for state in new_least_breaks_set:
+        # guaranteed to not overwrite anything already in least_breaks
+        least_breaks[state] = max_breaks
 
     # BFS to see all ending states
-    while len(continuation_queue) > 0:
-      current_state = continuation_queue.popleft()
-      (hold, queue_index, current_board_hash) = current_state
-      current_mino_count = solver_lib.num_minos(current_board_hash)
-      current_num_breaks = least_breaks[current_state]
+    for queue_index in range(1, len(queue)):
+      for (hold, current_board_hash) in continuation_queues[queue_index]:
+        current_state = (hold, queue_index, current_board_hash)
 
-      # Test not using hold, then using hold piece
-      for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-        for next_board_hash in _cached_get_next_boards(current_board_hash, next_used, max_breaks, can180):
-          next_state = (next_hold, queue_index + 1, next_board_hash)
+        # Test not using hold, then using hold piece
+        for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
+          for next_board_hash in _cached_get_next_boards(current_board_hash, next_used, 0, can180):
+            next_state = (next_hold, queue_index + 1, next_board_hash)
 
-          # Update break counts
-          next_mino_count = solver_lib.num_minos(next_board_hash)
-          next_num_breaks = current_num_breaks + (next_mino_count > current_mino_count)
-          if next_state not in least_breaks or next_num_breaks < least_breaks[next_state]:
-            least_breaks[next_state] = next_num_breaks
-            # Make sure we only add possible origin placements if the number of breaks along the way is the same
-            # We do this by resetting reversed_immediate_placements[next_state]
-            if queue_index >= 2:
-              reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-          
-          # Add next states to queue
-          if least_breaks[next_state] <= max_breaks:
-            # Initialize immediate_placements and reversed_immediate_placements
-            (next_hold, next_queue_index, next_board_hash) = next_state
-            if next_queue_index == 2:
-              immediate_placements[(next_hold, next_board_hash)] = set()
-              reversed_immediate_placements[next_state] = set(((next_hold, next_board_hash),))
+            # If we have already visited least_breaks previously, there is a path with less breaks
+            if next_state not in least_breaks:
+              least_breaks[next_state] = max_breaks
             
-            # Update reversed_immediate_placements
-            if next_queue_index >= 3:
-              if next_state not in reversed_immediate_placements:
-                reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-              elif next_num_breaks == least_breaks[next_state]:
-                reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
+              # Add next states to queue
+              # Initialize immediate_placements and reversed_immediate_placements
+              (next_hold, next_queue_index, next_board_hash) = next_state
+              immediate_placement_state = (next_hold, next_board_hash)
+              if next_queue_index == 2:
+                if next_state not in reversed_immediate_placements:
+                  reversed_immediate_placements[next_state] = set((immediate_placement_state,))
+                if immediate_placement_state not in immediate_placements:
+                  immediate_placements[immediate_placement_state] = set()
+              
+              # Update reversed_immediate_placements
+              if next_queue_index >= 3:
+                if next_state not in reversed_immediate_placements:
+                  reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
+                elif least_breaks[next_state] == max_breaks:
+                  reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
 
-            # Actually add next states to queue
-            if next_state not in states_considered:
-              if queue_index + 1 < len(queue):
-                states_considered.add(next_state)
-                continuation_queue.append(next_state)
+              # Actually add next states to queue
+              if next_state not in states_considered:
+                if queue_index + 1 < len(queue):
+                  states_considered.add(next_state)
+                  continuation_queues[queue_index + 1].append(immediate_placement_state)
 
     # fill in immediate_placements
     for ending_state in reversed_immediate_placements:
@@ -307,7 +331,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
     
     # display board and game state
     solver_lib.display_board(current_hash)
-    print(f"Combo: {current_combo}, time = {round(time_elapsed, 4)}")
+    print(f"Combo: {current_combo}, pps = {round(1/time_elapsed, 2)}")
 
     max_hash = max(max_hash, current_hash)
     if max_hash > 16**32:
