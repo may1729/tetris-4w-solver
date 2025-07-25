@@ -10,7 +10,7 @@ try:
     tc = load_transition_cache(TC_FILE)
 except:
     pass
-#
+# board queue hold vision foresight
 def f(line: str):
     global tc
     a = line.split(" ")
