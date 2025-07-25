@@ -12,7 +12,7 @@ import time
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
 def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, transition_cache = {}, foresight_cache = {}):
-  BREAKS_LIMIT = 2  # ignore anything with more than BREAKS_LIMIT breaks
+  BREAKS_LIMIT = len(queue) # ignore anything with more than BREAKS_LIMIT breaks
 
   # Cache the next boards. (board_hash, piece, no_breaks) -> reachable boards
   saved_next_boards = transition_cache
