@@ -395,30 +395,6 @@ def load_transition_cache(filename):
   input_file.close()
   return transition_cache
 
-# # key: (board, piece); value: { [board]: finesse }
-# def hash_states(d):
-#   s = '';
-  
-#   for board, piece in d:
-#     i = '';
-#     for k in d[(board, piece)]:
-#       i += str(k) + ":" + ",".join(d[(board, piece)][k]) + ";"
-#     s += f'{board}&{piece}={i}/'
-  
-#   return s.strip()
-
-# def unhash_states(s: str):
-#   d = {}
-#   for line in s.split("/"):
-#     if line.strip() == "": continue
-#     (key, value) = line.split("=")
-#     (board, piece) = key.split("&")
-#     i = {}
-#     for ln in value.split(";"):
-#       if ln.strip() == "": continue
-#       (k,v) = ln.split(":")
-#       i[k] = v.split(",")
-#     d[(board, piece)] = i
-  
-#   return d
-  
+def is_spin_state(board_hash: int, x: int, y: int, rotation: int) -> bool:
+  board = unhash_board(board_hash)
+  return False
