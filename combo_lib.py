@@ -44,16 +44,17 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
       continuation_queues[1].append((queue[0], board_hash))
       least_breaks[(queue[0], 1, board_hash)] = 0
       if build_up_now:
-        # upstack by placing up to min(len(queue)-1, 3) pieces
+        # upstack by placing up to min(len(queue)-1, 2) pieces
         # ignore everything except board state
-        max_upstack_pieces = min(len(queue)-1, 3)
+        max_upstack_pieces = min(len(queue)-1, 2)
 
         # add states to queue
-        for upstack_num in range(max_upstack_pieces):
-          for (hold, current_board_hash) in continuation_queues[upstack_num]:
+        for queue_index in range(max_upstack_pieces):
+          for (hold, current_board_hash) in continuation_queues[queue_index]:
+            current_state = (hold, queue_index, current_board_hash)
             # Test not using hold, then using hold piece
             for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-              for next_board_hash in _cached_get_next_boards(board_state, next_used, 1, can180):
+              for next_board_hash in _cached_get_next_boards(current_board_hash, next_used, 1, can180):
                 next_state = (next_hold, queue_index + 1, next_board_hash)
                 immediate_placement_state = (next_hold, next_board_hash)
                 if next_state not in least_breaks:
@@ -267,7 +268,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
   if end_hold != queue[0]:
     used = queue[0]
     finesse_list.append("hold")
-  finesse_list += _cached_get_next_boards(board_hash, used, max_breaks, can180)[end_hash][1]
+  finesse_list += _cached_get_next_boards(board_hash, used, 1, can180)[end_hash][1]
   # output for bot
   print(f"{used} {','.join(finesse_list)}")
 
@@ -335,14 +336,16 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
   fc = {}
   
   if tc_cache_filename != None:
-    tc = solver_lib.load_transition_cache(tc_cache_filename)
-    key = list(tc.keys())[0]
-    print(key, tc[key])
+    try:
+      tc = solver_lib.load_transition_cache(tc_cache_filename)
+    except:
+      tc = {}
 
   for decision_num in range(simulation_length):
     # compute next state
+    upstack = (solver_lib.num_minos(current_hash) < 12)
     time_start = time.time()
-    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, transition_cache=tc, foresight_cache=fc)
+    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, build_up_now=upstack, transition_cache=tc, foresight_cache=fc)
     time_elapsed = time.time() - time_start
     (hold, current_hash) = next_state
     combo.append(next_state)
