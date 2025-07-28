@@ -43,7 +43,41 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
     if max_breaks == 0:
       continuation_queues[1].append((queue[0], board_hash))
       least_breaks[(queue[0], 1, board_hash)] = 0
+      if build_up_now:
+        # upstack by placing up to min(len(queue)-1, 3) pieces
+        # ignore everything except board state
+        max_upstack_pieces = min(len(queue)-1, 3)
+
+        # add states to queue
+        for upstack_num in range(max_upstack_pieces):
+          for (hold, current_board_hash) in continuation_queues[upstack_num]:
+            # Test not using hold, then using hold piece
+            for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
+              for next_board_hash in _cached_get_next_boards(board_state, next_used, 1, can180):
+                next_state = (next_hold, queue_index + 1, next_board_hash)
+                immediate_placement_state = (next_hold, next_board_hash)
+                if next_state not in least_breaks:
+                  least_breaks[next_state] = 0
+                  # guaranteed to not be over index because of max_upstack_pieces
+                  if next_state not in states_considered:
+                    states_considered.add(next_state)
+                    continuation_queues[queue_index + 1].append(immediate_placement_state)
+
+                  # initialize immediate_placements and reversed_immediate_placements
+                  if queue_index == 1:
+                    if next_state not in reversed_immediate_placements:
+                      reversed_immediate_placements[next_state] = set((immediate_placement_state,))
+                    if immediate_placement_state not in immediate_placements:
+                      immediate_placements[immediate_placement_state] = set()
+                  
+                  # Update reversed_immediate_placements
+                  if queue_index >= 2:
+                    if next_state not in reversed_immediate_placements:
+                      reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
+                    elif next_state in new_least_breaks_set:
+                      reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
     else:
+      # Faster break logic
       for state in least_breaks:
         (hold, queue_index, board_state) = state
         # Test not using hold, then using hold piece
@@ -71,7 +105,6 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
                   reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
                 elif next_state in new_least_breaks_set:
                   reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
-
 
       # add states in new_least_breaks_set to least_breaks
       for state in new_least_breaks_set:
