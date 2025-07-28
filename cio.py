@@ -10,8 +10,8 @@ try:
     tc = load_transition_cache(TC_FILE)
 except:
     pass
-# board queue hold vision foresight
-def f(line: str):
+# board queue hold vision foresight can180 upstack
+def p_combo(line: str):
     global tc
     a = line.split(" ")
     # print(a)
@@ -29,18 +29,27 @@ def f(line: str):
         queue = queue[1] + queue[0] + queue[2:]
         
     can180 = bool(int(a[5]))
+    should_upstack = bool(int(a[6]))
+    # use_hold = bool(int(a[7]))
         
     # print(f'{board} {queue}')
 
-    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, tc)
+    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, should_upstack, tc)
     # print(f'stored {o}')
     return;
+
+def p_pc(line: str):
+    pass
 
 while True:
     line = input()
     if line == "ex":
         save_transition_cache(tc, TC_FILE)
         print("ok")
+    elif line.startswith("ren "):
+        p_combo(line[4:])
+    elif line.startswith("pc "):
+        p_pc(line[3:])
     else:
-        f(line)
+        pass
         
