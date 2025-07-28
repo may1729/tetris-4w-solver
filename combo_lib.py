@@ -11,7 +11,8 @@ import time
 # if len(queue) - 1 pieces are placed
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
-def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, transition_cache = {}, foresight_cache = {}):
+# If build_up_now is True, then will prioritize upstacking to target minos over not breaking
+def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, build_up_now = False, transition_cache = {}, foresight_cache = {}):
   BREAKS_LIMIT = len(queue) # ignore anything with more than BREAKS_LIMIT breaks
 
   # Cache the next boards. (board_hash, piece, no_breaks) -> reachable boards
