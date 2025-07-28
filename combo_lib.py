@@ -12,7 +12,12 @@ import time
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
 # If build_up_now is True, then will prioritize upstacking to target minos over not breaking
-def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, build_up_now = False, transition_cache = {}, foresight_cache = {}):
+def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, canHold = True, build_up_now = False, transition_cache = {}, foresight_cache = {}):
+  # edit for holding
+  if not canHold:
+    # add an invalid piece to start of queue
+    queue = "?" + queue
+  
   BREAKS_LIMIT = len(queue) # ignore anything with more than BREAKS_LIMIT breaks
 
   # Cache the next boards. (board_hash, piece, no_breaks) -> reachable boards
@@ -88,8 +93,11 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
             # only allow breaks
             next_state = (next_hold, queue_index + 1, next_board_hash)
             immediate_placement_state = (next_hold, next_board_hash)
-            if solver_lib.num_minos(next_board_hash) > current_mino_count and next_state not in least_breaks:
-              new_least_breaks[next_state] = (max_breaks, least_breaks[state][1])
+            if solver_lib.num_minos(next_board_hash) > current_mino_count:
+              if next_state not in new_least_breaks:
+                new_least_breaks[next_state] = (max_breaks, least_breaks[state][1])
+              else:
+                new_least_breaks[next_state] = (max_breaks, max(new_least_breaks[next_state][1], least_breaks[state][1]))
               # guaranteed to not be over index because if it was then we found a continuation
               continuation_queues[queue_index + 1].append(immediate_placement_state)
 
@@ -219,6 +227,8 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
     best_end_state = None
     best_score = len(queue) * 1000000 * 10**foresight
     for state in immediate_placements:
+      if len(immediate_placements[state]) == 0:
+        continue
       score = best_score + 1
 
       if foresight == 0:
@@ -277,6 +287,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
   if best_end_state == None:
     # bot kinda screwed so just pick the last thing it was thinking of
     best_end_state = state
+    # we really shouldn't get here so uhhh idk
     # print("FK", flush = True)
   
   (end_hold, end_hash) = best_end_state
@@ -288,7 +299,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
   finesse_list += _cached_get_next_boards(board_hash, used, 1, can180)[end_hash][1]
   # output for bot
   print(f"{used} {','.join(finesse_list)}")
-
+  
   return best_end_state
 
 # Computes best combo continuation
@@ -321,7 +332,7 @@ def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 1,
 
 # inf ds simulator
 # simulation_length is number of pieces to simulate
-def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well_height = 8, tc_cache_filename = None, starting_state = 0):
+def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well_height = 8, canHold = True, tc_cache_filename = None, starting_state = 0):
   def _piece_list():
     pieces = list(solver_lib.PIECES.keys())
     index = len(pieces)
@@ -361,8 +372,9 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
   for decision_num in range(simulation_length):
     # compute next state
     upstack = (solver_lib.num_minos(current_hash) < 12)
+    next_queue = hold + window if canHold else window
     time_start = time.time()
-    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, build_up_now=upstack, transition_cache=tc, foresight_cache=fc)
+    next_state = get_best_next_combo_state(current_hash, next_queue, foresight, build_up_now=upstack, canHold=canHold, transition_cache=tc, foresight_cache=fc)
     time_elapsed = time.time() - time_start
     (hold, current_hash) = next_state
     combo.append(next_state)

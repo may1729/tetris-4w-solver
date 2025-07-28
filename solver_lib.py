@@ -192,6 +192,9 @@ def get_input_queues_for_output_sequence(target, hold):
 # board_hash is the hash of the input board.
 # piece is the next piece.
 def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
+  # Ensure piece is valid
+  if piece not in PIECES:
+    return {}
   
   # Obtain board
   board = unhash_board(board_hash)
