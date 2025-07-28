@@ -254,56 +254,55 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
       
       vv = ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")) if can180 else ((1, "rotateCW"), (3, "rotateCCW"))
       # test rotation
-      if piece != "O":
-        for (rotation_move, rotation_finesse) in vv:
-          new_rotation = (rotation + rotation_move) % 4
-          for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
-            new_y_position = kick_offset_y + y
-            new_x_position = kick_offset_x + x
-            good = True
-            for (offset_y, offset_x) in PIECES[piece][new_rotation]:
-              (new_y, new_x) = (new_y_position + offset_y, new_x_position + offset_x)
-              if (new_y, new_x) in square_set or not (0 <= new_y and 0 <= new_x < 4):
-                good = False
-                break
-            if good:
-              # gravity
-              original_y_position = new_y_position
-              while good:
-                new_y_position -= 1
-                for (offset_y, offset_x) in PIECES[piece][new_rotation]:
-                  (new_y, new_x) = (new_y_position + offset_y, new_x_position + offset_x)
-                  if (new_y, new_x) in square_set or not (0 <= new_y and 0 <= new_x < 4):
-                    good = False
-                    new_y_position += 1
-                    break
-              newState = (new_y_position, new_x_position, new_rotation)
-              if original_y_position != new_y_position:
-                queue.append((newState, False))
-                if (newState, False) not in previous:
-                  previous[(newState, False)] = (current, (rotation_finesse, "softDrop"))
-              else:
-                # check for spins
-                # consider making this a function later
-                # though this is the only location for spin right now
-                is_spin = False
-                if piece in CORNERS:
-                  corners = 0
-                  for corner_num in range(4):
-                    corner_x = new_x_position + CORNERS[piece][new_rotation][corner_num][0]
-                    corner_y = new_y_position - CORNERS[piece][new_rotation][corner_num][1]
-                    if (
-                      corner_y < 0
-                      or not 0 <= corner_x < 4
-                      or (corner_y < len(board) and board[corner_y][corner_x])
-                    ):
-                      corners += 1
-                  if corners >= 3:
-                    is_spin = True
-                queue.append((newState, is_spin))
-                if (newState, is_spin) not in previous:
-                  previous[(newState, is_spin)] = (current, (rotation_finesse,))
+      for (rotation_move, rotation_finesse) in vv:
+        new_rotation = (rotation + rotation_move) % 4
+        for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
+          new_y_position = kick_offset_y + y
+          new_x_position = kick_offset_x + x
+          good = True
+          for (offset_y, offset_x) in PIECES[piece][new_rotation]:
+            (new_y, new_x) = (new_y_position + offset_y, new_x_position + offset_x)
+            if (new_y, new_x) in square_set or not (0 <= new_y and 0 <= new_x < 4):
+              good = False
               break
+          if good:
+            # gravity
+            original_y_position = new_y_position
+            while good:
+              new_y_position -= 1
+              for (offset_y, offset_x) in PIECES[piece][new_rotation]:
+                (new_y, new_x) = (new_y_position + offset_y, new_x_position + offset_x)
+                if (new_y, new_x) in square_set or not (0 <= new_y and 0 <= new_x < 4):
+                  good = False
+                  new_y_position += 1
+                  break
+            newState = (new_y_position, new_x_position, new_rotation)
+            if original_y_position != new_y_position:
+              queue.append((newState, False))
+              if (newState, False) not in previous:
+                previous[(newState, False)] = (current, (rotation_finesse, "softDrop"))
+            else:
+              # check for spins
+              # consider making this a function later
+              # though this is the only location for spin right now
+              is_spin = False
+              if piece in CORNERS:
+                corners = 0
+                for corner_num in range(4):
+                  corner_x = new_x_position + CORNERS[piece][new_rotation][corner_num][0]
+                  corner_y = new_y_position - CORNERS[piece][new_rotation][corner_num][1]
+                  if (
+                    corner_y < 0
+                    or not 0 <= corner_x < 4
+                    or (corner_y < len(board) and board[corner_y][corner_x])
+                  ):
+                    corners += 1
+                if corners >= 3:
+                  is_spin = True
+              queue.append((newState, is_spin))
+              if (newState, is_spin) not in previous:
+                previous[(newState, is_spin)] = (current, (rotation_finesse,))
+            break
   
   # Obtain board states
   # board_hash -> (is_spin, finesse)
@@ -334,7 +333,7 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
       if (
         cleared_board_hash not in boards
         or (is_spin and not boards[cleared_board_hash][0])
-        or (is_spin == boards[cleared_board_hash][0] and len(finesse) < len(boards[cleared_board_hash]))
+        or (is_spin == boards[cleared_board_hash][0] and len(finesse) < len(boards[cleared_board_hash][1]))
       ): # :(
         boards[cleared_board_hash] = (is_spin, finesse)
   
