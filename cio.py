@@ -29,10 +29,11 @@ def f(line: str):
         queue = queue[1] + queue[0] + queue[2:]
         
     can180 = bool(int(a[5]))
+    should_upstack = bool(int(a[6]))
         
     # print(f'{board} {queue}')
 
-    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, tc)
+    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, should_upstack, tc)
     # print(f'stored {o}')
     return;
 
