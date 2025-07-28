@@ -334,8 +334,8 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
     print(f"Combo: {current_combo}, pps = {round(1/time_elapsed, 2)}")
 
     max_hash = max(max_hash, current_hash)
-    if max_hash > 16**32:
-      print("DEAD")
+    if max_hash > 16**27:
+      print(f"DEAD after {decision_num} pieces")
       break
   combos.append(current_combo)
   print(combos)

@@ -18,6 +18,7 @@ PC_QUEUES_FILENAME = "data/pc-queues.txt"
 # Reads piece data from txt file.
 # Returns {piece: {orientation: [squares relative to center]}}
 # Stored as (y, x)
+# Center of piece should always be on second line second character
 def get_pieces(filename):
   pieces = {}
   ifil = open(filename, 'r')
@@ -61,6 +62,20 @@ def get_kicks(filename):
   return kicks
 
 KICKS = get_kicks(KICKS_FILENAME)
+
+# Returns {piece: [list of corner_list]}
+# todo: put into file and do file reading
+# todo: might need to flip y
+def get_corners():
+  return {
+    'Z': [[[-2, -1], [1, -1], [2, 0], [-1, 0]], [[0, -1], [1, -2], [0, 2], [1, 1]], [[-2, 0], [1, 0], [2, 1], [-1, 1]], [[-1, -1], [0, -2], [0, 1], [-1, 2]]],
+    'L': [[[-1, -1], [0, -1], [1, 1], [-1, 1]], [[-1, -1], [1, -1], [1, 0], [-1, 1]], [[-1, -1], [1, -1], [1, 1], [0, 1]], [[-1, 0], [1, -1], [1, 1], [-1, 1]]],
+    'S': [[[-1, -1], [2, -1], [1, 0], [-2, 0]], [[0, -2], [1, -1], [1, 2], [0, 1]], [[-1, 0], [2, 0], [1, 1], [-2, 1]], [[-1, -2], [0, -1], [-1, 1], [0, 2]]],
+    'J': [[[0, -1], [1, -1], [1, 1], [-1, 1]], [[-1, -1], [1, 0], [1, 1], [-1, 1]], [[-1, -1], [1, -1], [0, 1], [-1, 1]], [[-1, -1], [1, -1], [1, 1], [-1, 0]]],
+    'T': [[[-1, -1], [1, -1], [1, 1], [-1, 1,]], [[-1, -1], [1, -1], [1, 1], [-1, 1,]], [[-1, -1], [1, -1], [1, 1], [-1, 1,]], [[-1, -1], [1, -1], [1, 1], [-1, 1,]]]
+  }
+
+CORNERS = get_corners()
 
 # Converts a board state to an integer.
 # Treats board state like binary string.
@@ -200,18 +215,18 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
   
   # State is (y, x, rotation)
   queue = deque()
-  queue.append((y, 1, 0))
+  queue.append(((y, 1, 0), False))
   visited = set()
-  # current state -> (previous state, keypress list)
+  # (current state, is_spin) -> (previous state, keypress list)
   previous = {}
-  previous[(y, 1, 0)] = (None, ())
+  previous[((y, 1, 0), False)] = (None, ())
   
   # BFS on all possible ending locations for piece, assuming 100g
   while len(queue) > 0:
     current = queue.popleft()
     if current not in visited:
       visited.add(current)
-      (y, x, rotation) = current
+      ((y, x, rotation), is_current_spin) = current
       
       # test movement
       for (x_move, x_finesse) in ((-1, "moveLeft"), (1, "moveRight")):
@@ -227,12 +242,12 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
               break
         if new_y_offset <= 0:
           newState = (y + new_y_offset, x + x_move, rotation)
-          queue.append(newState)
-          if newState not in previous:
+          queue.append((newState, False))
+          if (newState, False) not in previous:
             if new_y_offset < 0:
-              previous[newState] = (current, (x_finesse, "softDrop"))
+              previous[(newState, False)] = (current, (x_finesse, "softDrop"))
             else:
-              previous[newState] = (current, (x_finesse,))
+              previous[(newState, False)] = (current, (x_finesse,))
       
       vv = ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")) if can180 else ((1, "rotateCW"), (3, "rotateCCW"))
       # test rotation
@@ -259,24 +274,43 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
                   new_y_position += 1
                   break
             newState = (new_y_position, new_x_position, new_rotation)
-            queue.append(newState)
-            if newState not in previous:
-              if original_y_position != new_y_position:
-                previous[newState] = (current, (rotation_finesse, "softDrop"))
-              else:
-                previous[newState] = (current, (rotation_finesse,))
+            if original_y_position != new_y_position:
+              queue.append((newState, False))
+              if (newState, False) not in previous:
+                previous[(newState, False)] = (current, (rotation_finesse, "softDrop"))
+            else:
+              # check for spins
+              # consider making this a function later
+              # though this is the only location for spin right now
+              is_spin = False
+              if piece in CORNERS:
+                corners = 0
+                for corner_num in range(4):
+                  corner_x = new_x_position + CORNERS[piece][new_rotation][corner_num][0]
+                  corner_y = new_y_position - CORNERS[piece][new_rotation][corner_num][1]
+                  if (
+                    corner_y < 0
+                    or not 0 <= corner_x < 4
+                    or (corner_y < len(board) and board[corner_y][corner_x])
+                  ):
+                    corners += 1
+                if corners >= 3:
+                  is_spin = True
+              queue.append((newState, is_spin))
+              if (newState, is_spin) not in previous:
+                previous[(newState, is_spin)] = (current, (rotation_finesse,))
             break
   
   # Obtain board states
-  # board_hash -> finesse
+  # board_hash -> (is_spin, finesse)
   boards = {}
-  for (y, x, rotation) in visited:
+  for ((y, x, rotation), is_spin) in visited:
     
     new_hash = board_hash
     for (offset_y, offset_x) in PIECES[piece][rotation]:
       new_hash += 2**(4 * (y + offset_y) + x + offset_x)
     new_board = unhash_board(new_hash)
-    
+
     # Remove completed lines and check for breaks
     cleared_board = [_ for _ in new_board if 0 in _]
     kept_combo = len(cleared_board) != len(new_board)
@@ -284,7 +318,7 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
     # Compute finesse
     if not no_breaks or kept_combo:
       finesse_groups = []
-      current_state = (y, x, rotation)
+      current_state = ((y, x, rotation), is_spin)
       while current_state != None:
         (current_state, finesse_group) = previous[current_state]
         finesse_groups.append(finesse_group)
@@ -293,10 +327,12 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
         finesse += finesse_group
       
       cleared_board_hash = hash_board(cleared_board)
-      if cleared_board_hash not in boards:
-        boards[cleared_board_hash] = finesse
-      elif len(finesse) < len(boards[cleared_board_hash]):
-        boards[cleared_board_hash] = finesse
+      if (
+        cleared_board_hash not in boards
+        or (is_spin and not boards[cleared_board_hash][0])
+        or (is_spin == boards[cleared_board_hash][0] and len(finesse) < len(boards[cleared_board_hash]))
+      ): # :(
+        boards[cleared_board_hash] = (is_spin, finesse)
   
   return boards
 
@@ -394,7 +430,3 @@ def load_transition_cache(filename):
   transition_cache = pickle.load(input_file)
   input_file.close()
   return transition_cache
-
-def is_spin_state(board_hash: int, x: int, y: int, rotation: int) -> bool:
-  board = unhash_board(board_hash)
-  return False
