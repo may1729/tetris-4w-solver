@@ -27,7 +27,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
   immediate_placements = {}
   # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
   reversed_immediate_placements = {}
-  # (hold, queue_index, board_state) -> combo breaks
+  # (hold, queue_index, board_state) -> (combo breaks, num_spins)
   least_breaks = {}
 
   for max_breaks in range(BREAKS_LIMIT+1):
@@ -39,10 +39,10 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
     continuation_queues = defaultdict(list)
 
     # make max_breaks > 0 faster by using results from max_breaks - 1
-    new_least_breaks_set = set()
+    new_least_breaks = {}
     if max_breaks == 0:
       continuation_queues[1].append((queue[0], board_hash))
-      least_breaks[(queue[0], 1, board_hash)] = 0
+      least_breaks[(queue[0], 1, board_hash)] = (0, 0)
       if build_up_now:
         # upstack by placing up to min(len(queue)-1, 2) pieces
         # ignore everything except board state
@@ -58,7 +58,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
                 next_state = (next_hold, queue_index + 1, next_board_hash)
                 immediate_placement_state = (next_hold, next_board_hash)
                 if next_state not in least_breaks:
-                  least_breaks[next_state] = 0
+                  least_breaks[next_state] = (0, 0)
                   # guaranteed to not be over index because of max_upstack_pieces
                   if next_state not in states_considered:
                     states_considered.add(next_state)
@@ -75,7 +75,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
                   if queue_index >= 2:
                     if next_state not in reversed_immediate_placements:
                       reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-                    elif next_state in new_least_breaks_set:
+                    else:
                       reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
     else:
       # Faster break logic
@@ -89,7 +89,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
             next_state = (next_hold, queue_index + 1, next_board_hash)
             immediate_placement_state = (next_hold, next_board_hash)
             if solver_lib.num_minos(next_board_hash) > current_mino_count and next_state not in least_breaks:
-              new_least_breaks_set.add(next_state)
+              new_least_breaks[next_state] = (max_breaks, least_breaks[1])
               # guaranteed to not be over index because if it was then we found a continuation
               continuation_queues[queue_index + 1].append(immediate_placement_state)
 
@@ -104,13 +104,13 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
               if queue_index >= 2:
                 if next_state not in reversed_immediate_placements:
                   reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-                elif next_state in new_least_breaks_set:
+                elif next_state in new_least_breaks:
                   reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
 
       # add states in new_least_breaks_set to least_breaks
-      for state in new_least_breaks_set:
+      for state in new_least_breaks:
         # guaranteed to not overwrite anything already in least_breaks
-        least_breaks[state] = max_breaks
+        least_breaks[state] = new_least_breaks[state]
 
     # BFS to see all ending states
     for queue_index in range(1, len(queue)):
@@ -119,12 +119,17 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
 
         # Test not using hold, then using hold piece
         for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-          for next_board_hash in _cached_get_next_boards(current_board_hash, next_used, 0, can180):
+          next_board_dictionary = _cached_get_next_boards(current_board_hash, next_used, 0, can180)
+          for next_board_hash in next_board_dictionary:
             next_state = (next_hold, queue_index + 1, next_board_hash)
+            is_spin = next_board_dictionary[next_board_hash][0]
 
             # If we have already visited least_breaks previously, there is a path with less breaks
             if next_state not in least_breaks:
-              least_breaks[next_state] = max_breaks
+              next_num_spins = least_breaks[current_state][1]
+              if max_breaks == 0 and is_spin:
+                next_num_spins += 1
+              least_breaks[next_state] = (max_breaks, next_num_spins)
             
               # Add next states to queue
               # Initialize immediate_placements and reversed_immediate_placements
@@ -140,7 +145,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
               if next_queue_index >= 3:
                 if next_state not in reversed_immediate_placements:
                   reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-                elif least_breaks[next_state] == max_breaks:
+                elif least_breaks[next_state][0] == max_breaks[0]:  # todo verify ignoring num spins works
                   reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
 
               # Actually add next states to queue
@@ -219,9 +224,11 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
       if foresight == 0:
         for end_state in immediate_placements[state]:
           # num breaks portion
-          temp_score = least_breaks[end_state] * 1000 * 10**foresight
+          temp_score = least_breaks[end_state][0] * 1000 * 10**foresight
           # mino count portion
-          temp_score += solver_lib.score_num_minos(solver_lib.num_minos(end_state[2]))
+          temp_score += solver_lib.score_num_minos(solver_lib.num_minos(end_state[2])) * len(queue)
+          # subtract number based on number of spins
+          temp_score -= least_breaks[end_state][1]
           # update best end score
           score = min(temp_score, score)
       
@@ -231,15 +238,23 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
         
         # best mino score of anything that accommodates a queue
         currently_accommodated = {}
+        # spin counts
+        currently_accommodated_spins = {}
 
         for max_num_breaks in range(max_breaks, max_breaks + 2):
           for end_state in immediate_placements[state]:
-            if least_breaks[end_state] == max_num_breaks:
+            if least_breaks[end_state][0] == max_num_breaks:
               for accommodated_queue in accommodated[end_state]:
-                if accommodated_queue not in currently_accommodated:
+                if (
+                  accommodated_queue not in currently_accommodated
+                  or accommodated[end_state][accommodated_queue] <= currently_accommodated[accommodated_queue]
+                ):
                   currently_accommodated[accommodated_queue] = accommodated[end_state][accommodated_queue]
-                elif accommodated[end_state][accommodated_queue] < currently_accommodated[accommodated_queue]:
-                  currently_accommodated[accommodated_queue] = accommodated[end_state][accommodated_queue]
+                  if (
+                    accommodated_queue not in currently_accommodated_spins
+                    or least_breaks[end_state][1] > currently_accommodated_spins[accommodated_queue]
+                  ):
+                    currently_accommodated_spins[accommodated_queue] = least_breaks[end_state][1]
           if len(currently_accommodated) > 0:
             break
         
@@ -248,7 +263,9 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
         # We add 1000 for each unaccommodated next piece
         score += (7**foresight - len(currently_accommodated)) * 1000
         # mino count portion
-        score += sum(currently_accommodated.values())
+        score += sum(currently_accommodated.values()) * len(queue)
+        # spins portion
+        score -= sum(currently_accommodated_spins.values())
       
       if score < best_score:
         best_score = score
