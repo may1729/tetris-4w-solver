@@ -233,7 +233,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, t
   if end_hold != queue[0]:
     used = queue[0]
     finesse_list.append("hold")
-  finesse_list += _cached_get_next_boards(board_hash, used, max_breaks, can180)[end_hash]
+  finesse_list += _cached_get_next_boards(board_hash, used, max_breaks, can180)[end_hash][1]
   # output for bot
   print(f"{used} {','.join(finesse_list)}")
 
