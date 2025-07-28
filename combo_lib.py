@@ -89,7 +89,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, b
             next_state = (next_hold, queue_index + 1, next_board_hash)
             immediate_placement_state = (next_hold, next_board_hash)
             if solver_lib.num_minos(next_board_hash) > current_mino_count and next_state not in least_breaks:
-              new_least_breaks[next_state] = (max_breaks, least_breaks[1])
+              new_least_breaks[next_state] = (max_breaks, least_breaks[state][1])
               # guaranteed to not be over index because if it was then we found a continuation
               continuation_queues[queue_index + 1].append(immediate_placement_state)
 
