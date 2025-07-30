@@ -167,7 +167,10 @@ def display_boards(board_hash_list):
 
 # Score a mino count
 # This is based on distance from 6, 9, 12, 15 minos
+# Also make it really dislike 4res
 def score_num_minos(mino_count):
+  if mino_count == 4:
+    return 400
   target = [12, 9, 6, 15][mino_count % 4]
   return abs(mino_count - target)
 

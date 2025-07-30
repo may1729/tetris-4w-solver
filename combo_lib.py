@@ -28,9 +28,9 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
       saved_next_boards[(_board_hash, _piece, _no_breaks, can180)] = solver_lib.get_next_boards(_board_hash, _piece, _no_breaks, can180)
     return saved_next_boards[(_board_hash, _piece, _no_breaks, can180)]
 
-  # (hold, board_state) -> set of (hold, queue_index, ending_board_state)
+  # (hold, board_state) -> {(hold, queue_index, ending_board_state) -> num_spins}
   immediate_placements = {}
-  # (hold, queue_index, board_state) -> set of (hold, starting_board_state)
+  # (hold, queue_index, board_state) -> {(hold, starting_board_state) -> num_spins}
   reversed_immediate_placements = {}
   # (hold, queue_index, board_state) -> (combo breaks, num_spins)
   least_breaks = {}
@@ -72,16 +72,20 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
                   # initialize immediate_placements and reversed_immediate_placements
                   if queue_index == 1:
                     if next_state not in reversed_immediate_placements:
-                      reversed_immediate_placements[next_state] = set((immediate_placement_state,))
+                      reversed_immediate_placements[next_state] = {immediate_placement_state:0}
                     if immediate_placement_state not in immediate_placements:
-                      immediate_placements[immediate_placement_state] = set()
+                      immediate_placements[immediate_placement_state] = {}
                   
                   # Update reversed_immediate_placements
                   if queue_index >= 2:
                     if next_state not in reversed_immediate_placements:
-                      reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-                    else:
-                      reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
+                      reversed_immediate_placements[next_state] = {}
+                    for start_state in reversed_immediate_placements[current_state]:
+                      if (
+                        start_state not in reversed_immediate_placements[next_state]
+                        or reversed_immediate_placements[current_state][start_state] > reversed_immediate_placements[next_state][start_state]
+                      ):
+                        reversed_immediate_placements[next_state][start_state] = reversed_immediate_placements[current_state][start_state]
     else:
       # Faster break logic
       for state in least_breaks:
@@ -104,16 +108,20 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
               # initialize immediate_placements and reversed_immediate_placements
               if queue_index == 1:
                 if next_state not in reversed_immediate_placements:
-                  reversed_immediate_placements[next_state] = set((immediate_placement_state,))
+                  reversed_immediate_placements[next_state] = {immediate_placement_state:0}
                 if immediate_placement_state not in immediate_placements:
-                  immediate_placements[immediate_placement_state] = set()
+                  immediate_placements[immediate_placement_state] = {}
               
               # Update reversed_immediate_placements
               if queue_index >= 2:
                 if next_state not in reversed_immediate_placements:
-                  reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-                elif next_state in new_least_breaks:
-                  reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
+                  reversed_immediate_placements[next_state] = {}
+                for start_state in reversed_immediate_placements[current_state]:
+                  if (
+                    start_state not in reversed_immediate_placements[next_state]
+                    or reversed_immediate_placements[current_state][start_state] > reversed_immediate_placements[next_state][start_state]
+                  ):
+                    reversed_immediate_placements[next_state][start_state] = reversed_immediate_placements[current_state][start_state]
 
       # add states in new_least_breaks_set to least_breaks
       for state in new_least_breaks:
@@ -145,16 +153,21 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
               immediate_placement_state = (next_hold, next_board_hash)
               if next_queue_index == 2:
                 if next_state not in reversed_immediate_placements:
-                  reversed_immediate_placements[next_state] = set((immediate_placement_state,))
+                  reversed_immediate_placements[next_state] = {immediate_placement_state:int(is_spin)}
                 if immediate_placement_state not in immediate_placements:
-                  immediate_placements[immediate_placement_state] = set()
+                  immediate_placements[immediate_placement_state] = {}
               
               # Update reversed_immediate_placements
               if next_queue_index >= 3:
                 if next_state not in reversed_immediate_placements:
-                  reversed_immediate_placements[next_state] = reversed_immediate_placements[current_state]
-                elif least_breaks[next_state][0] == max_breaks[0]:  # todo verify ignoring num spins works
-                  reversed_immediate_placements[next_state] = reversed_immediate_placements[next_state].union(reversed_immediate_placements[current_state])
+                  reversed_immediate_placements[next_state] = {}
+                if least_breaks[next_state][0] == max_breaks:
+                  for start_state in reversed_immediate_placements[current_state]:
+                    if (
+                      start_state not in reversed_immediate_placements[next_state]
+                      or reversed_immediate_placements[current_state][start_state] + int(is_spin) > reversed_immediate_placements[next_state][start_state]
+                    ):
+                      reversed_immediate_placements[next_state][start_state] = reversed_immediate_placements[current_state][start_state] + int(is_spin)
 
               # Actually add next states to queue
               if next_state not in states_considered:
@@ -167,7 +180,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
       queue_index = ending_state[1]
       if queue_index == len(queue):
         for immediate_placement in reversed_immediate_placements[ending_state]:
-          immediate_placements[immediate_placement].add(ending_state)
+          immediate_placements[immediate_placement][ending_state] = reversed_immediate_placements[ending_state][immediate_placement]
 
     # Do foresight
     # (hold, queue_index, board_state) -> {set of accommodated next queues -> mino score}
@@ -238,7 +251,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
           # mino count portion
           temp_score += solver_lib.score_num_minos(solver_lib.num_minos(end_state[2])) * len(queue)
           # subtract number based on number of spins
-          temp_score -= least_breaks[end_state][1]
+          temp_score -= immediate_placements[state][end_state]
           # update best end score
           score = min(temp_score, score)
       
@@ -262,9 +275,9 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
                   currently_accommodated[accommodated_queue] = accommodated[end_state][accommodated_queue]
                   if (
                     accommodated_queue not in currently_accommodated_spins
-                    or least_breaks[end_state][1] > currently_accommodated_spins[accommodated_queue]
+                    or immediate_placements[state][end_state] > currently_accommodated_spins[accommodated_queue]
                   ):
-                    currently_accommodated_spins[accommodated_queue] = least_breaks[end_state][1]
+                    currently_accommodated_spins[accommodated_queue] = immediate_placements[state][end_state]
           if len(currently_accommodated) > 0:
             break
         
