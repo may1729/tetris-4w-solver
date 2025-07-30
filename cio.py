@@ -25,16 +25,16 @@ def p_combo(line: str):
     hold = '' if a[2] == '_' else a[2]
     foresight = int(a[4])
 
-    if hold == '':
-        queue = queue[1] + queue[0] + queue[2:]
         
     can180 = bool(int(a[5]))
     should_upstack = bool(int(a[6]))
-    # use_hold = bool(int(a[7]))
+    use_hold = bool(int(a[7]))
         
+    if hold == '' and use_hold:
+        queue = queue[1] + queue[0] + queue[2:]
     # print(f'{board} {queue}')
 
-    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, should_upstack, tc)
+    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, use_hold, should_upstack, tc)
     # print(f'stored {o}')
     return;
 
