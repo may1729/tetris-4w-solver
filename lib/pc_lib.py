@@ -1,6 +1,6 @@
 ### IMPORTS ###
 
-import libs.board_lib as board_lib
+import lib.board_lib as board_lib
 
 from collections import defaultdict, deque
 import os
@@ -11,10 +11,10 @@ import os
 # filename is the name of the file to output to, or read from.
 # n is the length of the queue.
 # h is the max height an intermediate board state can be.
-# override, if true, will generate a new file even if one already exists.
+# override_existing_file, if true, will generate a new file even if one already exists.
 # add_board_states, if true, will add the hashes of the board states after each queue.
-def generate_all_pc_queues(filename: str, n: int = 8, h: int  = 8, override: bool = False, add_board_states: bool = False):
-  if not override and os.path.isfile(filename):
+def generate_all_pc_queues(filename: str, num_pieces: int = 8, max_height: int  = 8, override_existing_file: bool = False, add_board_states: bool = False) -> list[str]:
+  if not override_existing_file and os.path.isfile(filename):
     with open(filename, 'r') as input_file:
       N = int(input_file.readline().strip())
       if not add_board_states:
@@ -26,14 +26,14 @@ def generate_all_pc_queues(filename: str, n: int = 8, h: int  = 8, override: boo
           pcs[line[0]] = list(map(int, line[1:]))
     return pcs
   
-  h = min(n, h)
+  max_height = min(num_pieces, max_height)
   pcs = set()
   
-  max_board = 2**(4*h) - 1  # max hash
+  max_board = 2**(4*max_height) - 1  # max hash
   
   # Optimization: use BFS forwards and backwards
-  n_backwards = n//4 + 1
-  n_forwards = n - n_backwards
+  n_backwards = num_pieces//4 + 1
+  n_forwards = num_pieces - n_backwards
   
   # Backwards direction
   backwards_queue = deque()
@@ -105,7 +105,7 @@ def generate_all_pc_queues(filename: str, n: int = 8, h: int  = 8, override: boo
 # Determines the set of saves for a given pc queue ("X" if no save), given set of pcs.
 # piece_queue is a string containing the next pieces.
 # pcs is the set of all pc queues to consider.
-def get_pc_saves(piece_queue: str, pcs: set):
+def get_pc_saves(piece_queue: str, pcs: set[str]) -> dict[str, str]:
   saves = {}
   for queue_order in board_lib.get_queue_orders(piece_queue):
     if queue_order[:-1] in pcs:
@@ -116,28 +116,28 @@ def get_pc_saves(piece_queue: str, pcs: set):
 
 # Computes the maximum number of pcs that can be obtained in a queue.
 # piece_queue is a string containing the next pieces.
-def max_pcs_in_queue(piece_queue: str):
+def max_pcs_in_queue(piece_queue: str) -> tuple[int, list[str]]:
   pcs = set(generate_all_pc_queues(board_lib.PC_QUEUES_FILENAME))  # set of all pcs
-  max_n = len(max(pcs, key = lambda _:len(_)))  # longest pc
+  max_n = len(max(pcs, key = lambda _:len(_)))  # length of longest pc
   piece_queue = piece_queue + "X"  # terminator character
-  dp = {(1, piece_queue[0]): (0, None, None)}  # (index, hold piece) -> (num pcs, previous state, previous solve)
+  most_pcs_at_state = {(1, piece_queue[0]): (0, None, None)}  # (index, hold piece) -> (num pcs, previous state, previous solve)
   for index in range(1, len(piece_queue)):
     for hold in board_lib.PIECES:
       current_state = (index, hold)
-      if current_state in dp:
+      if current_state in most_pcs_at_state:
         for pieces_used in range(1, min(len(piece_queue) + 1 - index, max_n + 1)):
           pc_queue = hold + piece_queue[index:index + pieces_used]
           saves = get_pc_saves(pc_queue, pcs)
           for save in saves:
             next_state = (index + pieces_used, save)
-            if next_state not in dp or dp[current_state][0] + 1 > dp[next_state][0]:
-              dp[next_state] = (dp[current_state][0] + 1, current_state, saves[save])
-  (max_pcs, current_state, prev_solve) = max(dp.values())
+            if next_state not in most_pcs_at_state or most_pcs_at_state[current_state][0] + 1 > most_pcs_at_state[next_state][0]:
+              most_pcs_at_state[next_state] = (most_pcs_at_state[current_state][0] + 1, current_state, saves[save])
+  (max_pcs, current_state, prev_solve) = max(most_pcs_at_state.values())
   if max_pcs == 0:
     return (0, [])
   reversed_history = [prev_solve,]
-  while dp[current_state][2] is not None:
-    reversed_history.append(dp[current_state][2])
-    current_state = dp[current_state][1]
+  while most_pcs_at_state[current_state][2] is not None:
+    reversed_history.append(most_pcs_at_state[current_state][2])
+    current_state = most_pcs_at_state[current_state][1]
   history = list(reversed(reversed_history))
   return (max_pcs, history)

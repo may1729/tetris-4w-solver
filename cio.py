@@ -1,7 +1,7 @@
 # minacode :oyes:
 import json
-from libs.combo_lib import get_best_next_combo_state
-from libs.board_lib import hash_board, save_transition_cache, load_transition_cache
+from lib.combo_lib import get_best_next_combo_state
+from lib.board_lib import hash_board, save_transition_cache, load_transition_cache
 
 tc = {}
 TC_FILE = "data/tc"

@@ -1,6 +1,6 @@
 ### IMPORTS ###
 
-import libs.board_lib as board_lib
+import lib.board_lib as board_lib
 
 from collections import defaultdict, deque
 import random
@@ -12,7 +12,7 @@ import time
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
 # If build_up_now is True, then will prioritize upstacking to target minos over not breaking
-def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, can180: bool = True, canHold: bool = True, build_up_now: bool = False, transition_cache: dict | None = None, foresight_cache: dict | None = None):
+def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, can180: bool = True, canHold: bool = True, build_up_now: bool = False, transition_cache: dict | None = None, foresight_cache: dict | None = None) -> tuple[str, int]:
 
   if transition_cache is None:
     transition_cache = {}
@@ -326,7 +326,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
 # using lookahead previews and foresight prediction
 # if finish is true, will attempt to place an additional lookahead - 1 pieces
 # (may have suspicious placements at the end)
-def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6, foresight: int = 1, finish: bool = True):
+def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6, foresight: int = 1, finish: bool = True) -> list[tuple[str, int]]:
   combo = []
   current_hash = board_hash
   hold = queue[0]
@@ -351,8 +351,8 @@ def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6,
 
 # inf ds simulator
 # simulation_length is number of pieces to simulate
-def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight: int = 1, well_height: int = 8, canHold: bool = True, tc_cache_filename: str | None = None, starting_state: int = 0):
-  def _piece_list():
+def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight: int = 1, well_height: int = 8, canHold: bool = True, tc_cache_filename: str | None = None, starting_state: int = 0) -> list[tuple[str, int]]:
+  def _piece_list():  # why isn't this its own function in board_lib
     pieces = list(board_lib.PIECES.keys())
     index = len(pieces)
     while True:
@@ -362,8 +362,8 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
       yield pieces[index]
       index += 1
   pieces = _piece_list()
-  combo = []
-  combos = []
+  combo_decisions = []
+  combo_numbers = []
 
   # initialize game state
   max_hash = 0
@@ -396,7 +396,7 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
     next_state = get_best_next_combo_state(current_hash, next_queue, foresight, build_up_now=upstack, canHold=canHold, transition_cache=tc, foresight_cache=fc)
     time_elapsed = time.time() - time_start
     (hold, current_hash) = next_state
-    combo.append(next_state)
+    combo_decisions.append(next_state)
 
     # compute next window
     window = window[1:] + next(pieces)
@@ -407,7 +407,7 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
       current_combo += 1
       current_minos = minos
     else:
-      combos.append(current_combo)
+      combo_numbers.append(current_combo)
       current_combo = 0
       current_minos = minos + 3 * well_height
 
@@ -422,8 +422,8 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
     if max_hash > 16**27:
       print(f"DEAD after {decision_num} pieces")
       break
-  combos.append(current_combo)
-  print(combos)
+  combo_numbers.append(current_combo)
+  print(combo_numbers)
   height = 0
   while max_hash > 0:
     max_hash //= 16
@@ -432,4 +432,4 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
 
   board_lib.save_transition_cache(tc, tc_cache_filename)
 
-  return combo
+  return combo_decisions
