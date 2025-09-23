@@ -1,6 +1,6 @@
 ### IMPORTS ###
 
-import board_lib
+import libs.board_lib as board_lib
 
 from collections import defaultdict, deque
 import os
@@ -15,16 +15,15 @@ import os
 # add_board_states, if true, will add the hashes of the board states after each queue.
 def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_states = False):
   if not override and os.path.isfile(filename):
-    ifil = open(filename, 'r')
-    N = int(ifil.readline().strip())
-    if not add_board_states:
-      pcs = [ifil.readline().strip() for _ in range(N)]
-    else:
-      pcs = {}
-      for _ in range(N):
-        line = ifil.readline().strip().split("|")
-        pcs[line[0]] = list(map(int, line[1:]))
-    ifil.close()
+    with open(filename, 'r') as input_file:
+      N = int(input_file.readline().strip())
+      if not add_board_states:
+        pcs = [input_file.readline().strip() for _ in range(N)]
+      else:
+        pcs = {}
+        for _ in range(N):
+          line = input_file.readline().strip().split("|")
+          pcs[line[0]] = list(map(int, line[1:]))
     return pcs
   
   h = min(n, h)
@@ -97,11 +96,10 @@ def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_s
   pcs.add("I")  # Edge case
   
   # Save to output file
-  ofil = open(filename, 'w')
-  pcs = sorted(pcs, key = lambda pc: (len(pc), pc))
-  ofil.write(str(len(pcs)) + "\n")
-  ofil.write("\n".join(pcs))
-  ofil.close()
+  with open(filename, 'w') as output_file:
+    pcs = sorted(pcs, key = lambda pc: (len(pc), pc))
+    output_file.write(str(len(pcs)) + "\n")
+    output_file.write("\n".join(pcs))
   return pcs
 
 # Determines the set of saves for a given pc queue ("X" if no save), given set of pcs.

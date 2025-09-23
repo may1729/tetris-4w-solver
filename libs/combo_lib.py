@@ -1,6 +1,6 @@
 ### IMPORTS ###
 
-import board_lib
+import libs.board_lib as board_lib
 
 from collections import defaultdict, deque
 import random

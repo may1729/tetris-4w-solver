@@ -21,20 +21,19 @@ PC_QUEUES_FILENAME = "data/pc-queues.txt"
 # Center of piece should always be on second line second character
 def get_pieces(filename):
   pieces = {}
-  ifil = open(filename, 'r')
-  piece_list = ifil.readline().strip()
-  for piece in piece_list:
-    pieces[piece] = {}
-    squares = []
-    row1 = ifil.readline().strip()
-    row0 = ifil.readline().strip()
-    for i in range(4):
-      if row0[i] != ".": squares.append((0, i-1))
-      if row1[i] != ".": squares.append((1, i-1))
-    for rotation in range(4):
-      pieces[piece][rotation] = tuple(squares)
-      squares = [(-x, y) for (y, x) in squares]
-  ifil.close()
+  with open(filename, 'r') as input_file:
+    piece_list = input_file.readline().strip()
+    for piece in piece_list:
+      pieces[piece] = {}
+      squares = []
+      row1 = input_file.readline().strip()
+      row0 = input_file.readline().strip()
+      for i in range(4):
+        if row0[i] != ".": squares.append((0, i-1))
+        if row1[i] != ".": squares.append((1, i-1))
+      for rotation in range(4):
+        pieces[piece][rotation] = tuple(squares)
+        squares = [(-x, y) for (y, x) in squares]
   return pieces
 
 PIECES = get_pieces(PIECES_FILENAME)
@@ -47,18 +46,17 @@ PIECE_WIDTH["I"] = 4
 # Returns {piece: {orientation: {input: [offset order]}}}
 def get_kicks(filename):
   kicks = {}
-  ifil = open(filename, 'r')
-  for _p in range(7):
-    piece = ifil.readline().strip()
-    kicks[piece] = {}
-    for orientation in range(4):
-      kicks[piece][orientation] = {}
-      for rotation_input in range(1, 4):
-        ifil.readline()
-        offsets = ifil.readline().strip().split("; ")
-        piece_kicks = [tuple(map(int, _.split(", "))) for _ in offsets]
-        kicks[piece][orientation][rotation_input] = piece_kicks
-  ifil.close()
+  with open(filename, 'r') as input_file:
+    for _p in range(7):
+      piece = input_file.readline().strip()
+      kicks[piece] = {}
+      for orientation in range(4):
+        kicks[piece][orientation] = {}
+        for rotation_input in range(1, 4):
+          input_file.readline()
+          offsets = input_file.readline().strip().split("; ")
+          piece_kicks = [tuple(map(int, _.split(", "))) for _ in offsets]
+          kicks[piece][orientation][rotation_input] = piece_kicks
   return kicks
 
 KICKS = get_kicks(KICKS_FILENAME)
@@ -426,13 +424,11 @@ def get_previous_boards_given_queue(board_hash, queue):
 
 # saves transition_cache to pickle
 def save_transition_cache(transition_cache, filename):
-  output_file = open(filename, 'wb')
-  pickle.dump(transition_cache, output_file)
-  output_file.close()
+  with open(filename, 'wb') as output_file:
+    pickle.dump(transition_cache, output_file)
 
 # load transition_cache from pickle
 def load_transition_cache(filename):
-  input_file = open(filename, 'rb')
-  transition_cache = pickle.load(input_file)
-  input_file.close()
+  with open(filename, 'rb') as input_file:
+    transition_cache = pickle.load(input_file)
   return transition_cache
