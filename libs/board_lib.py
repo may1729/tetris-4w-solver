@@ -11,15 +11,15 @@ ROTATIONS = ["N", "E", "S", "W"]
 ROTATION_MOVES = ["0", "CW", "180", "CCW"]
 
 # File names
-PIECES_FILENAME = "data/pieces.txt"
-KICKS_FILENAME = "data/kicks.txt"
-PC_QUEUES_FILENAME = "data/pc-queues.txt"
+PIECES_FILENAME = "../data/pieces.txt"
+KICKS_FILENAME = "../data/kicks.txt"
+PC_QUEUES_FILENAME = "../data/pc-queues.txt"
 
 # Reads piece data from txt file.
 # Returns {piece: {orientation: [squares relative to center]}}
 # Stored as (y, x)
 # Center of piece should always be on second line second character
-def get_pieces(filename):
+def get_pieces(filename: str):
   pieces = {}
   with open(filename, 'r') as input_file:
     piece_list = input_file.readline().strip()
@@ -44,7 +44,7 @@ PIECE_WIDTH["I"] = 4
 
 # Reads kick data from txt file.
 # Returns {piece: {orientation: {input: [offset order]}}}
-def get_kicks(filename):
+def get_kicks(filename: str):
   kicks = {}
   with open(filename, 'r') as input_file:
     for _p in range(7):
@@ -78,7 +78,7 @@ CORNERS = get_corners()
 # Converts a board state to an integer.
 # Treats board state like binary string.
 # Bits are read top to bottom, and right to left within each row.
-def hash_board(board):
+def hash_board(board: list):
   board_hash = 0
   for row in reversed(board):
     for square in reversed(row):
@@ -87,7 +87,7 @@ def hash_board(board):
   return board_hash
 
 # Converts an integer to a board state.
-def unhash_board(board_hash):
+def unhash_board(board_hash: int):
   board = []
   while board_hash > 0:
     row_hash = board_hash % 16
@@ -99,7 +99,7 @@ def unhash_board(board_hash):
   return board
 
 # Computes number of minos in the board state corresponding to a hash.
-def num_minos(board_hash):
+def num_minos(board_hash: int):
   minos = 0
   while board_hash > 0:
     minos += board_hash % 2
@@ -107,7 +107,7 @@ def num_minos(board_hash):
   return minos
 
 # Obtains list of squares in the board.
-def get_square_list(board):
+def get_square_list(board: list):
   square_list = []
   for y in range(len(board)):
     for x in range(4):
@@ -116,7 +116,7 @@ def get_square_list(board):
   return square_list
 
 # Obtains list of ways to insert at most max_lines lines into a board
-def lines_to_insert(board_height, max_lines):
+def lines_to_insert(board_height: int, max_lines: int):
   if max_lines == 1:
     yield ()
     for height in range(board_height+1):
@@ -131,7 +131,7 @@ def lines_to_insert(board_height, max_lines):
       yield ()
 
 # Obtains all queues (ignoring bag structure) of length n
-def all_queues(queue_length):
+def all_queues(queue_length: int):
   if queue_length <= 0:
     yield ""
   else:
@@ -140,7 +140,7 @@ def all_queues(queue_length):
         yield queue + piece
 
 # Obtains all possible ways to play a queue given one hold.
-def get_queue_orders(queue):
+def get_queue_orders(queue: str):
   if len(queue) == 1:
     yield queue[0]
     return
@@ -150,7 +150,7 @@ def get_queue_orders(queue):
     yield queue[1] + queue_order
 
 # Displays a board
-def display_board(board_hash):
+def display_board(board_hash: int):
   board = unhash_board(board_hash)
   print("|    |")
   for row in reversed(board):
@@ -158,7 +158,7 @@ def display_board(board_hash):
   print("+----+")
 
 # Displays a list of boards
-def display_boards(board_hash_list):
+def display_boards(board_hash_list: list):
   for board_hash in board_hash_list:
     display_board(board_hash)
     print()
@@ -166,14 +166,14 @@ def display_boards(board_hash_list):
 # Score a mino count
 # This is based on distance from 6, 9, 12, 15 minos
 # Also make it really dislike 4res
-def score_num_minos(mino_count):
+def score_num_minos(mino_count: int):
   if mino_count == 4:
     return 400
   target = [12, 9, 6, 15][mino_count % 4]
   return abs(mino_count - target)
 
 # Obtains queues that with the given hold could place the specified pieces
-def get_input_queues_for_output_sequence(target, hold):
+def get_input_queues_for_output_sequence(target: str, hold: str):
   if len(target) == 0:
     yield ""
   elif target[0] == hold:
@@ -192,7 +192,7 @@ def get_input_queues_for_output_sequence(target, hold):
 # Assume 100g.
 # board_hash is the hash of the input board.
 # piece is the next piece.
-def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
+def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180: bool = True):
   # Ensure piece is valid
   if piece not in PIECES:
     return {}
@@ -323,7 +323,7 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
     if not no_breaks or kept_combo:
       finesse_groups = []
       current_state = ((y, x, rotation), is_spin)
-      while current_state != None:
+      while current_state is not None:
         (current_state, finesse_group) = previous[current_state]
         finesse_groups.append(finesse_group)
       finesse = []
@@ -343,7 +343,7 @@ def get_next_boards(board_hash, piece, no_breaks = False, can180 = True):
 # Computes all possible board states at the end of the given queue.
 # board_hash is the hash of the input board.
 # queue is a string containing the next pieces.
-def get_next_boards_given_queue(board_hash, queue):
+def get_next_boards_given_queue(board_hash: int, queue: str):
   boards = set([board_hash])
   for piece in queue:
     new_boards = set()
@@ -358,7 +358,10 @@ def get_next_boards_given_queue(board_hash, queue):
 # board_hash is the hash of the input board.
 # piece is the next piece.
 # forwards_saved_transitions is a cache of the transitions of board states in the forwards direction.
-def get_previous_boards(board_hash, piece, forwards_saved_transitions = {}):
+def get_previous_boards(board_hash: int, piece: str, forwards_saved_transitions: dict | None = None):
+
+  if forwards_saved_transitions is None:
+    forwards_saved_transitions = {}
   
   # Obtain board
   board = unhash_board(board_hash)
@@ -412,7 +415,7 @@ def get_previous_boards(board_hash, piece, forwards_saved_transitions = {}):
 # Computes all possible board states that at the end of the given queue results in the given board.
 # board_hash is the hash of the input board.
 # queue is a string containing the next pieces.
-def get_previous_boards_given_queue(board_hash, queue):
+def get_previous_boards_given_queue(board_hash: int, queue: str):
   boards = set([board_hash])
   forwards_saved_transitions = {}
   for piece in reversed(queue):
@@ -423,12 +426,12 @@ def get_previous_boards_given_queue(board_hash, queue):
   return sorted(boards)
 
 # saves transition_cache to pickle
-def save_transition_cache(transition_cache, filename):
+def save_transition_cache(transition_cache: dict, filename: str):
   with open(filename, 'wb') as output_file:
     pickle.dump(transition_cache, output_file)
 
 # load transition_cache from pickle
-def load_transition_cache(filename):
+def load_transition_cache(filename: str):
   with open(filename, 'rb') as input_file:
     transition_cache = pickle.load(input_file)
   return transition_cache

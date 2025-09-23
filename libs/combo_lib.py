@@ -12,7 +12,13 @@ import time
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
 # If build_up_now is True, then will prioritize upstacking to target minos over not breaking
-def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, canHold = True, build_up_now = False, transition_cache = {}, foresight_cache = {}):
+def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, can180: bool = True, canHold: bool = True, build_up_now: bool = False, transition_cache: dict | None = None, foresight_cache: dict | None = None):
+
+  if transition_cache is None:
+    transition_cache = {}
+  if foresight_cache is None:
+    foresight_cache = {}
+
   # edit for holding
   if not canHold:
     # add an invalid piece to start of queue
@@ -294,10 +300,10 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
         best_score = score
         best_end_state = state
 
-    if best_end_state != None:
+    if best_end_state is not None:
       break
   
-  if best_end_state == None:
+  if best_end_state is None:
     # bot kinda screwed so just pick the last thing it was thinking of
     best_end_state = state
     # we really shouldn't get here so uhhh idk
@@ -320,7 +326,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
 # using lookahead previews and foresight prediction
 # if finish is true, will attempt to place an additional lookahead - 1 pieces
 # (may have suspicious placements at the end)
-def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 1, finish = True):
+def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6, foresight: int = 1, finish: bool = True):
   combo = []
   current_hash = board_hash
   hold = queue[0]
@@ -345,7 +351,7 @@ def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 1,
 
 # inf ds simulator
 # simulation_length is number of pieces to simulate
-def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well_height = 8, canHold = True, tc_cache_filename = None, starting_state = 0):
+def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight: int = 1, well_height: int = 8, canHold: bool = True, tc_cache_filename: str | None = None, starting_state: int = 0):
   def _piece_list():
     pieces = list(board_lib.PIECES.keys())
     index = len(pieces)
@@ -376,7 +382,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
   tc = {}
   fc = {}
   
-  if tc_cache_filename != None:
+  if tc_cache_filename is not None:
     try:
       tc = board_lib.load_transition_cache(tc_cache_filename)
     except:

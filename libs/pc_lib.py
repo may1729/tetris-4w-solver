@@ -13,7 +13,7 @@ import os
 # h is the max height an intermediate board state can be.
 # override, if true, will generate a new file even if one already exists.
 # add_board_states, if true, will add the hashes of the board states after each queue.
-def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_states = False):
+def generate_all_pc_queues(filename: str, n: int = 8, h: int  = 8, override: bool = False, add_board_states: bool = False):
   if not override and os.path.isfile(filename):
     with open(filename, 'r') as input_file:
       N = int(input_file.readline().strip())
@@ -105,7 +105,7 @@ def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_s
 # Determines the set of saves for a given pc queue ("X" if no save), given set of pcs.
 # piece_queue is a string containing the next pieces.
 # pcs is the set of all pc queues to consider.
-def get_pc_saves(piece_queue, pcs):
+def get_pc_saves(piece_queue: str, pcs: set):
   saves = {}
   for queue_order in board_lib.get_queue_orders(piece_queue):
     if queue_order[:-1] in pcs:
@@ -116,7 +116,7 @@ def get_pc_saves(piece_queue, pcs):
 
 # Computes the maximum number of pcs that can be obtained in a queue.
 # piece_queue is a string containing the next pieces.
-def max_pcs_in_queue(piece_queue):
+def max_pcs_in_queue(piece_queue: str):
   pcs = set(generate_all_pc_queues(board_lib.PC_QUEUES_FILENAME))  # set of all pcs
   max_n = len(max(pcs, key = lambda _:len(_)))  # longest pc
   piece_queue = piece_queue + "X"  # terminator character
@@ -136,7 +136,7 @@ def max_pcs_in_queue(piece_queue):
   if max_pcs == 0:
     return (0, [])
   reversed_history = [prev_solve,]
-  while dp[current_state][2] != None:
+  while dp[current_state][2] is not None:
     reversed_history.append(dp[current_state][2])
     current_state = dp[current_state][1]
   history = list(reversed(reversed_history))
