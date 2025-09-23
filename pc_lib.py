@@ -1,6 +1,6 @@
 ### IMPORTS ###
 
-import solver_lib
+import board_lib
 
 from collections import defaultdict, deque
 import os
@@ -51,10 +51,10 @@ def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_s
       (board_hash, history) = current
       
       # Check each possible next piece
-      for piece in solver_lib.PIECES:
+      for piece in board_lib.PIECES:
         new_history = piece + history
         if (board_hash, piece) not in backwards_saved_transitions:
-          backwards_saved_transitions[(board_hash, piece)] = solver_lib.get_previous_boards(board_hash, piece, forwards_saved_transitions)
+          backwards_saved_transitions[(board_hash, piece)] = board_lib.get_previous_boards(board_hash, piece, forwards_saved_transitions)
         for previous_board in backwards_saved_transitions[(board_hash, piece)]:
           # Track reachable board states
           if previous_board != 0 and previous_board < max_board:
@@ -75,10 +75,10 @@ def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_s
       (board_hash, history) = current
       
       # Check each possible next piece
-      for piece in solver_lib.PIECES:
+      for piece in board_lib.PIECES:
         new_history = history + piece
         if (board_hash, piece) not in forwards_saved_transitions:
-          forwards_saved_transitions[(board_hash, piece)] = solver_lib.get_next_boards(board_hash, piece)
+          forwards_saved_transitions[(board_hash, piece)] = board_lib.get_next_boards(board_hash, piece)
         for next_board in forwards_saved_transitions[(board_hash, piece)]:
           # Track reachable board states
           if next_board < max_board and next_board != 0:
@@ -109,7 +109,7 @@ def generate_all_pc_queues(filename, n = 8, h = 8, override = False, add_board_s
 # pcs is the set of all pc queues to consider.
 def get_pc_saves(piece_queue, pcs):
   saves = {}
-  for queue_order in solver_lib.get_queue_orders(piece_queue):
+  for queue_order in board_lib.get_queue_orders(piece_queue):
     if queue_order[:-1] in pcs:
       saves[queue_order[-1]] = queue_order[:-1]
     if queue_order in pcs:
@@ -119,12 +119,12 @@ def get_pc_saves(piece_queue, pcs):
 # Computes the maximum number of pcs that can be obtained in a queue.
 # piece_queue is a string containing the next pieces.
 def max_pcs_in_queue(piece_queue):
-  pcs = set(generate_all_pc_queues(solver_lib.PC_QUEUES_FILENAME))  # set of all pcs
+  pcs = set(generate_all_pc_queues(board_lib.PC_QUEUES_FILENAME))  # set of all pcs
   max_n = len(max(pcs, key = lambda _:len(_)))  # longest pc
   piece_queue = piece_queue + "X"  # terminator character
   dp = {(1, piece_queue[0]): (0, None, None)}  # (index, hold piece) -> (num pcs, previous state, previous solve)
   for index in range(1, len(piece_queue)):
-    for hold in solver_lib.PIECES:
+    for hold in board_lib.PIECES:
       current_state = (index, hold)
       if current_state in dp:
         for pieces_used in range(1, min(len(piece_queue) + 1 - index, max_n + 1)):

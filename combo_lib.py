@@ -1,6 +1,6 @@
 ### IMPORTS ###
 
-import solver_lib
+import board_lib
 
 from collections import defaultdict, deque
 import random
@@ -25,7 +25,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
   def _cached_get_next_boards(_board_hash, _piece, _num_breaks, can180):
     _no_breaks = (_num_breaks == 0)
     if (_board_hash, _piece, _no_breaks, can180) not in saved_next_boards:
-      saved_next_boards[(_board_hash, _piece, _no_breaks, can180)] = solver_lib.get_next_boards(_board_hash, _piece, _no_breaks, can180)
+      saved_next_boards[(_board_hash, _piece, _no_breaks, can180)] = board_lib.get_next_boards(_board_hash, _piece, _no_breaks, can180)
     return saved_next_boards[(_board_hash, _piece, _no_breaks, can180)]
 
   # (hold, board_state) -> {(hold, queue_index, ending_board_state) -> num_spins}
@@ -91,13 +91,13 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
       for state in least_breaks:
         (hold, queue_index, board_state) = state
         # Test not using hold, then using hold piece
-        current_mino_count = solver_lib.num_minos(board_state)
+        current_mino_count = board_lib.num_minos(board_state)
         for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
           for next_board_hash in _cached_get_next_boards(board_state, next_used, 1, can180):
             # only allow breaks
             next_state = (next_hold, queue_index + 1, next_board_hash)
             immediate_placement_state = (next_hold, next_board_hash)
-            if solver_lib.num_minos(next_board_hash) > current_mino_count:
+            if board_lib.num_minos(next_board_hash) > current_mino_count:
               if next_state not in new_least_breaks:
                 new_least_breaks[next_state] = (max_breaks, least_breaks[state][1])
               else:
@@ -192,11 +192,11 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
         (hold, queue_index, final_hash) = final_state
         if queue_index != len(queue):
           continue
-        current_mino_count = solver_lib.num_minos(final_hash)
+        current_mino_count = board_lib.num_minos(final_hash)
         accommodated[final_state] = {}
         # foresight queue -> best score
         foresight_scores = {}
-        for foresight_queue in solver_lib.all_queues(foresight):
+        for foresight_queue in board_lib.all_queues(foresight):
           foresight_scores[foresight_queue] = 1000
 
           # (foresight_queue_index, foresight_board_hash)
@@ -208,15 +208,15 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
           while len(foresight_continuation_queue) > 0:
             current_state = foresight_continuation_queue.popleft()
             (foresight_queue_index, foresight_board_hash) = current_state
-            current_mino_count = solver_lib.num_minos(foresight_board_hash)
+            current_mino_count = board_lib.num_minos(foresight_board_hash)
 
             for next_board_hash in _cached_get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index], 0, can180):
               next_state = (foresight_queue_index + 1, next_board_hash)
-              next_mino_count = solver_lib.num_minos(next_board_hash)
-              if solver_lib.num_minos(next_board_hash) <= current_mino_count:
+              next_mino_count = board_lib.num_minos(next_board_hash)
+              if board_lib.num_minos(next_board_hash) <= current_mino_count:
                 if foresight_queue_index == foresight - 1:
                   # scoring
-                  foresight_scores[foresight_queue] = min(foresight_scores[foresight_queue], solver_lib.score_num_minos(next_mino_count))
+                  foresight_scores[foresight_queue] = min(foresight_scores[foresight_queue], board_lib.score_num_minos(next_mino_count))
                 else:
                   # add to bfs queue
                   foresight_continuation_queue.append(next_state)
@@ -225,7 +225,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
         for foresight_queue in foresight_scores:
           if foresight_scores[foresight_queue] != 1000:
             if (foresight_queue, hold) not in foresight_cache:
-              foresight_cache[(foresight_queue, hold)] = list(solver_lib.get_input_queues_for_output_sequence(foresight_queue, hold))
+              foresight_cache[(foresight_queue, hold)] = list(board_lib.get_input_queues_for_output_sequence(foresight_queue, hold))
             for input_queue in foresight_cache[(foresight_queue, hold)]:
               if input_queue not in accommodated[final_state]:
                 accommodated[final_state][input_queue] = foresight_scores[foresight_queue]
@@ -249,7 +249,7 @@ def get_best_next_combo_state(board_hash, queue, foresight = 1, can180 = True, c
           # num breaks portion
           temp_score = least_breaks[end_state][0] * 1000 * 10**foresight
           # mino count portion
-          temp_score += solver_lib.score_num_minos(solver_lib.num_minos(end_state[2])) * len(queue)
+          temp_score += board_lib.score_num_minos(board_lib.num_minos(end_state[2])) * len(queue)
           # subtract number based on number of spins
           temp_score -= immediate_placements[state][end_state]
           # update best end score
@@ -347,7 +347,7 @@ def get_best_combo_continuation(board_hash, queue, lookahead = 6, foresight = 1,
 # simulation_length is number of pieces to simulate
 def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well_height = 8, canHold = True, tc_cache_filename = None, starting_state = 0):
   def _piece_list():
-    pieces = list(solver_lib.PIECES.keys())
+    pieces = list(board_lib.PIECES.keys())
     index = len(pieces)
     while True:
       if index == len(pieces):
@@ -378,13 +378,13 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
   
   if tc_cache_filename != None:
     try:
-      tc = solver_lib.load_transition_cache(tc_cache_filename)
+      tc = board_lib.load_transition_cache(tc_cache_filename)
     except:
       tc = {}
 
   for decision_num in range(simulation_length):
     # compute next state
-    upstack = (solver_lib.num_minos(current_hash) < 12)
+    upstack = (board_lib.num_minos(current_hash) < 12)
     next_queue = hold + window if canHold else window
     time_start = time.time()
     next_state = get_best_next_combo_state(current_hash, next_queue, foresight, build_up_now=upstack, canHold=canHold, transition_cache=tc, foresight_cache=fc)
@@ -396,7 +396,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
     window = window[1:] + next(pieces)
 
     # handle combo logic
-    minos = solver_lib.num_minos(current_hash)
+    minos = board_lib.num_minos(current_hash)
     if minos <= current_minos:
       current_combo += 1
       current_minos = minos
@@ -409,7 +409,7 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
       current_hash = current_hash * (16**well_height) + wells[random.randint(0, 3)]
     
     # display board and game state
-    solver_lib.display_board(current_hash)
+    board_lib.display_board(current_hash)
     print(f"Combo: {current_combo}, pps = {round(1/time_elapsed, 2)}")
 
     max_hash = max(max_hash, current_hash)
@@ -424,6 +424,6 @@ def simulate_inf_ds(simulation_length = 1000, lookahead = 6, foresight = 1, well
     height += 1
   print(height)
 
-  solver_lib.save_transition_cache(tc, tc_cache_filename)
+  board_lib.save_transition_cache(tc, tc_cache_filename)
 
   return combo

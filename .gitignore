@@ -2,3 +2,5 @@ __pycache__
 .DS_Store
 temp.py
 data/pc-queues/pc-queues9.txt
+data/tc
+data/old tc
