@@ -17,7 +17,9 @@ CORNERS_FILENAME = "../data/corners.txt"
 PC_QUEUES_FILENAME = "../data/pc-queues.txt"
 
 # Types
-type CoordinateList = list[tuple[int, int]]
+type Coordinate = tuple[int, int]
+type CoordinateList = list[Coordinate]
+type CoordinateSet = set[Coordinate]
 type Board = list[list[int]]
 
 # Reads piece data from txt file.
@@ -161,6 +163,48 @@ def get_queue_orders(queue: str) -> typing.Generator[str]:
   for queue_order in get_queue_orders(queue[0] + queue[2:]):
     yield queue[1] + queue_order
 
+# Determines if a piece location is in board bounds and does not intersect board
+def is_piece_location_valid(mino_set: CoordinateSet, mino_offsets: CoordinateList, piece_y: int, piece_x: int):
+  for (offset_y, offset_x) in mino_offsets:
+    y = piece_y + offset_y
+    x = piece_x + offset_x
+    if (y, x) in mino_set or y < 0 or x < 0 or x >= 4:
+      return False
+  return True
+
+# Determines if a piece location and rotation counts as a spin under 3 corner handheld rule.
+# Assume initial location is valid and previous action is a rotation.
+def is_piece_location_spin(mino_set: CoordinateSet, piece: str, rotation: int, piece_y: int, piece_x: int):
+  if piece not in CORNERS:
+    return False
+  corner_count = 0
+  for corner_num in range(4):
+    corner_x = piece_x + CORNERS[piece][rotation][corner_num][0]
+    corner_y = piece_y - CORNERS[piece][rotation][corner_num][1]
+    if (
+      corner_y < 0
+      or not 0 <= corner_x < 4
+      or (corner_y, corner_x) in mino_set
+    ):
+      corner_count += 1
+  return corner_count >= 3
+
+# Compute vertical position of piece after sonic drop, assuming initial location is valid
+def get_gravity_y(mino_set: CoordinateSet, mino_offsets: CoordinateList, start_y: int, start_x: int):
+  current_y = start_y - 1
+  floor_y = -min([offset[0] for offset in mino_offsets])
+  while current_y >= floor_y:    
+    is_floating = True
+    for (offset_y, offset_x) in mino_offsets:
+      if (current_y + offset_y, start_x + offset_x) in mino_set:
+        is_floating = False
+        break
+    if not is_floating:
+      break
+    current_y -= 1
+  current_y += 1
+  return current_y
+
 # Displays a board
 def display_board(board_hash: int) -> None:
   board = unhash_board(board_hash)
@@ -214,24 +258,12 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
   mino_set = set(get_mino_list(board))
   
   # Detect starting position of piece, assuming 100g
-  y = len(board) - 1
-  while True:
-    if y < 0:
-      y = 0
-      break
-    is_floating = True
-    for (offset_y, offset_x) in PIECES[piece][0]:
-      if (y + offset_y, 1 + offset_x) in mino_set:
-        is_floating = False
-        break
-    if not is_floating:
-      y += 1
-      break
-    y -= 1
+  y = get_gravity_y(mino_set, PIECES[piece][0], len(board), 1)
   
   # State is (y, x, rotation)
   queue = deque()
   queue.append(((y, 1, 0), False))
+  # Set of states visited in queue
   visited = set()
   # (current state, is_spin) -> (previous state, keypress list)
   previous = {}
@@ -245,73 +277,37 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
       ((y, x, rotation), is_current_spin) = current
       
       # test movement
-      for (x_move, x_finesse) in ((-1, "moveLeft"), (1, "moveRight")):
-        new_y_offset = 1
-        is_floating = True
-        while is_floating:
-          new_y_offset -= 1
-          for (offset_y, offset_x) in PIECES[piece][rotation]:
-            (new_y, new_x) = (y + offset_y + new_y_offset, x + offset_x + x_move)
-            if (new_y, new_x) in mino_set or not (0 <= new_y and 0 <= new_x < 4):
-              is_floating = False
-              new_y_offset += 1
-              break
-        if new_y_offset <= 0:
-          newState = (y + new_y_offset, x + x_move, rotation)
+      valid_movement_list = ((-1, "moveLeft"), (1, "moveRight"))
+      for (x_move, x_finesse) in valid_movement_list:
+        new_y = y
+        if is_piece_location_valid(mino_set, PIECES[piece][rotation], y, x + x_move):
+          new_y = get_gravity_y(mino_set, PIECES[piece][rotation], y, x + x_move)
+          newState = (new_y, x + x_move, rotation)
           queue.append((newState, False))
           if (newState, False) not in previous:
-            if new_y_offset < 0:
+            if new_y != y:
               previous[(newState, False)] = (current, (x_finesse, "softDrop"))
             else:
               previous[(newState, False)] = (current, (x_finesse,))
       
-      valid_rotation_list = ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")) if can180 else ((1, "rotateCW"), (3, "rotateCCW"))
       # test rotation
+      valid_rotation_list = ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")) if can180 else ((1, "rotateCW"), (3, "rotateCCW"))
       for (rotation_move, rotation_finesse) in valid_rotation_list:
         new_rotation = (rotation + rotation_move) % 4
         for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
-          new_y_position = kick_offset_y + y
-          new_x_position = kick_offset_x + x
-          is_valid = True
-          for (offset_y, offset_x) in PIECES[piece][new_rotation]:
-            (new_y, new_x) = (new_y_position + offset_y, new_x_position + offset_x)
-            if (new_y, new_x) in mino_set or not (0 <= new_y and 0 <= new_x < 4):
-              is_valid = False
-              break
-          if is_valid:
+          rotated_y_position = kick_offset_y + y
+          rotated_x_position = kick_offset_x + x
+          if is_piece_location_valid(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position):
             # gravity
-            is_floating = True
-            original_y_position = new_y_position
-            while is_floating:
-              new_y_position -= 1
-              for (offset_y, offset_x) in PIECES[piece][new_rotation]:
-                (new_y, new_x) = (new_y_position + offset_y, new_x_position + offset_x)
-                if (new_y, new_x) in mino_set or not (0 <= new_y and 0 <= new_x < 4):
-                  is_floating = False
-                  new_y_position += 1
-                  break
-            newState = (new_y_position, new_x_position, new_rotation)
-            if original_y_position != new_y_position:
+            new_y_position = get_gravity_y(mino_set, PIECES[piece][rotation], rotated_y_position, rotated_x_position)
+            newState = (new_y_position, rotated_x_position, new_rotation)
+            if rotated_y_position != new_y_position:
               queue.append((newState, False))
               if (newState, False) not in previous:
                 previous[(newState, False)] = (current, (rotation_finesse, "softDrop"))
             else:
               # check for spins
-              # todo: make this a function
-              is_spin = False
-              if piece in CORNERS:
-                corners = 0
-                for corner_num in range(4):
-                  corner_x = new_x_position + CORNERS[piece][new_rotation][corner_num][0]
-                  corner_y = new_y_position - CORNERS[piece][new_rotation][corner_num][1]
-                  if (
-                    corner_y < 0
-                    or not 0 <= corner_x < 4
-                    or (corner_y < len(board) and board[corner_y][corner_x])
-                  ):
-                    corners += 1
-                if corners >= 3:
-                  is_spin = True
+              is_spin = is_piece_location_spin(mino_set, piece, new_rotation, new_y_position, rotated_x_position)
               queue.append((newState, is_spin))
               if (newState, is_spin) not in previous:
                 previous[(newState, is_spin)] = (current, (rotation_finesse,))
@@ -347,7 +343,7 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
         cleared_board_hash not in boards
         or (is_spin and not boards[cleared_board_hash][0])
         or (is_spin == boards[cleared_board_hash][0] and len(finesse) < len(boards[cleared_board_hash][1]))
-      ): # :(
+      ):
         boards[cleared_board_hash] = (is_spin, finesse)
   
   return boards
