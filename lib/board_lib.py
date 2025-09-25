@@ -72,18 +72,20 @@ def get_kicks_from_file(filename: str) -> dict[str, dict[int, dict[int, Coordina
 KICKS = get_kicks_from_file(KICKS_FILENAME)
 
 # Returns {piece: [list of corner_list]}
-# todo: put into file and do file reading
-# todo: might need to flip y
-def get_corners() -> dict[str, list[CoordinateList]]:
-  return {
-    'Z': [[[-2, -1], [1, -1], [2, 0], [-1, 0]], [[0, -1], [1, -2], [0, 2], [1, 1]], [[-2, 0], [1, 0], [2, 1], [-1, 1]], [[-1, -1], [0, -2], [0, 1], [-1, 2]]],
-    'L': [[[-1, -1], [0, -1], [1, 1], [-1, 1]], [[-1, -1], [1, -1], [1, 0], [-1, 1]], [[-1, -1], [1, -1], [1, 1], [0, 1]], [[-1, 0], [1, -1], [1, 1], [-1, 1]]],
-    'S': [[[-1, -1], [2, -1], [1, 0], [-2, 0]], [[0, -2], [1, -1], [1, 2], [0, 1]], [[-1, 0], [2, 0], [1, 1], [-2, 1]], [[-1, -2], [0, -1], [-1, 1], [0, 2]]],
-    'J': [[[0, -1], [1, -1], [1, 1], [-1, 1]], [[-1, -1], [1, 0], [1, 1], [-1, 1]], [[-1, -1], [1, -1], [0, 1], [-1, 1]], [[-1, -1], [1, -1], [1, 1], [-1, 0]]],
-    'T': [[[-1, -1], [1, -1], [1, 1], [-1, 1,]], [[-1, -1], [1, -1], [1, 1], [-1, 1,]], [[-1, -1], [1, -1], [1, 1], [-1, 1,]], [[-1, -1], [1, -1], [1, 1], [-1, 1,]]]
-  }
+def get_corners_from_file(filename: str) -> dict[str, list[CoordinateList]]:
+  corners = {}
+  with open(filename, 'r') as input_file:
+    num_pieces = int(input_file.readline())
+    for piece_num in range(num_pieces):
+      piece = input_file.readline().strip()
+      corners[piece] = []
+      for rotation_num in range(4):
+        offsets = input_file.readline().strip().split("; ")
+        orientation_corner_list = [tuple(map(int, _.split(", "))) for _ in offsets]
+        corners[piece].append(orientation_corner_list)
+  return corners
 
-CORNERS = get_corners()
+CORNERS = get_corners_from_file(CORNERS_FILENAME)
 
 # Converts a board state to an integer.
 # Treats board state like binary string.
