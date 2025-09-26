@@ -25,10 +25,12 @@ def p_combo(line: str):
     hold = '' if a[2] == '_' else a[2]
     foresight = int(a[4])
 
+    flags = a[5];
+
         
-    can180 = bool(int(a[5]))
-    should_upstack = bool(int(a[6]))
-    use_hold = bool(int(a[7]))
+    can180 = 'f' in flags
+    should_upstack = 'u' in flags
+    use_hold = 'h' in flags
         
     if hold == '' and use_hold:
         queue = queue[1] + queue[0] + queue[2:]
