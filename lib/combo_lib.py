@@ -13,7 +13,27 @@ import time
 # Returns the piece used and the next board hash
 # If build_up_now is True, then will prioritize upstacking to target minos over not breaking
 def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, can180: bool = True, canHold: bool = True, build_up_now: bool = False, transition_cache: dict | None = None, foresight_cache: dict | None = None) -> tuple[str, int]:
+  """Computes best next board state.
 
+  First, attempts to minimize number of placements over the next `len(queue) - 1` pieces that do not clear a line.
+  Among those, minimizes the number of minos on the board.
+
+  Returns a tuple with the piece used and the next board hash.
+
+  `board_hash` is the hash of the input board.
+
+  `queue` is a string containing the hold piece followed by the next pieces.
+
+  `foresight` is the length of the foresight queue.
+  This is used to compute the probability that the next `foresight` pieces will force a non line clear.
+  This is then accounted for when selecting a continuation.
+
+  If `can180` is False, then excludes all 180 finesse.
+
+  If `canHold` is False, then assumes that the hold queue is empty and disallows access to it.
+
+  If `build_up_now` is True, then will prioritize upstacking to target number of minos over not breaking.
+  """
   if transition_cache is None:
     transition_cache = {}
   if foresight_cache is None:
@@ -219,7 +239,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
             for next_board_hash in _cached_get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index], 0, can180):
               next_state = (foresight_queue_index + 1, next_board_hash)
               next_mino_count = board_lib.num_minos(next_board_hash)
-              if board_lib.num_minos(next_board_hash) <= current_mino_count:
+              if next_mino_count <= current_mino_count:
                 if foresight_queue_index == foresight - 1:
                   # scoring
                   foresight_scores[foresight_queue] = min(foresight_scores[foresight_queue], board_lib.score_num_minos(next_mino_count))
@@ -326,7 +346,26 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
 # using lookahead previews and foresight prediction
 # if finish is true, will attempt to place an additional lookahead - 1 pieces
 # (may have suspicious placements at the end)
-def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6, foresight: int = 1, finish: bool = True) -> list[tuple[str, int]]:
+def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6, foresight: int = 1, can180: bool = True, canHold: bool = True, finish: bool = True) -> list[tuple[str, int]]:
+  """Computes best combo continuation, placing `len(queue) - lookahead` pieces.
+
+  `board_hash` is the hash of the input board.
+
+  `queue` is a string containing the hold piece followed by the next pieces.
+
+  `lookahead` is the number of pieces to consider at a time for computation.
+
+  `foresight` is the length of the foresight queue.
+  This is used to compute the probability that the next `foresight` pieces will force a non line clear.
+  This is then accounted for when selecting a continuation.
+
+  If `can180` is False, then excludes all 180 finesse.
+
+  If `canHold` is False, then assumes that the hold queue is empty and disallows access to it.
+
+  If `finish` is True, will attempt to place an additional `lookahead - 1` pieces, exhausting the queue.
+  However, without more information, the placements at the end may not be optimal.
+  """
   combo = []
   current_hash = board_hash
   hold = queue[0]
@@ -334,7 +373,7 @@ def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6,
 
   for decision_num in range(len(queue) - 1):
     # compute next state
-    next_state = get_best_next_combo_state(current_hash, hold + window, foresight)
+    next_state = get_best_next_combo_state(current_hash, hold + window, foresight, can180, canHold)
     (hold, current_hash) = next_state
     combo.append(next_state)
 
@@ -352,16 +391,28 @@ def get_best_combo_continuation(board_hash: int, queue: str, lookahead: int = 6,
 # inf ds simulator
 # simulation_length is number of pieces to simulate
 def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight: int = 1, well_height: int = 8, canHold: bool = True, tc_cache_filename: str | None = None, starting_state: int = 0) -> list[tuple[str, int]]:
-  def _piece_list():  # why isn't this its own function in board_lib
-    pieces = list(board_lib.PIECES.keys())
-    index = len(pieces)
-    while True:
-      if index == len(pieces):
-        random.shuffle(pieces)
-        index = 0
-      yield pieces[index]
-      index += 1
-  pieces = _piece_list()
+  """Infinite downstack simulator.
+
+  Prints a simulation of the combo decisions taken.
+
+  `simulation_length` is number of pieces to simulate.
+
+  `lookahead` is the number of pieces to consider at a time for computation.
+
+  `foresight` is the length of the foresight queue.
+  This is used to compute the probability that the next `foresight` pieces will force a non line clear.
+  This is then accounted for when selecting a continuation.
+
+  `well_height` is the amount of garbage to add underneath the stack whenever a piece is placed that does not clear a line.
+
+  If `canHold` is False, then assumes that the hold queue is empty and disallows access to it.
+
+  `tc_cache_filename` is the file name of the transition cache to load or save from.
+  If `tc_cache_filename` is None, will not save the cache at the end.
+
+  `starting_state` is the hash of the intial board state.
+  """
+  pieces = board_lib.generate_7bag()
   combo_decisions = []
   combo_numbers = []
 
@@ -412,7 +463,7 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
       current_minos = minos + 3 * well_height
 
       # add garbage!!!
-      current_hash = current_hash * (16**well_height) + wells[random.randint(0, 3)]
+      current_hash = current_hash * int(16**well_height) + wells[random.randint(0, 3)]
     
     # display board and game state
     board_lib.display_board(current_hash)

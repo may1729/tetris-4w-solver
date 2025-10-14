@@ -5,15 +5,23 @@ import lib.board_lib as board_lib
 from collections import defaultdict, deque
 import os
 
-# Generate all PC queues for any possible queue
-# Reads from output file if one exists.
-# Otherwise, saves to output file because this is gonna take FOREVER.
-# filename is the name of the file to output to, or read from.
-# n is the length of the queue.
-# h is the max height an intermediate board state can be.
-# override_existing_file, if true, will generate a new file even if one already exists.
-# add_board_states, if true, will add the hashes of the board states after each queue.
-def generate_all_pc_queues(filename: str, num_pieces: int = 8, max_height: int  = 8, override_existing_file: bool = False, add_board_states: bool = False) -> list[str]:
+def generate_all_pc_queues(filename: str, num_pieces: int = 8, max_height: int = 8, override_existing_file: bool = False, add_board_states: bool = False) -> list[str]:
+  """Generate all PC queues.
+
+  `filename` is the name of the file to output to, or read from.
+
+  `num_pieces` is the maximum PC queue length to search for.
+
+  `max_height` is the tallest allowable height of an intermediate state.
+
+  `override_existing_file`, if True, will generate a new file even if one already exists.
+
+  `add_board_states`, if True, will add the hashes of the board states after each queue.
+
+  `add_finesse`, if True, will add the finesse used of the board states after each queue.
+
+  **The above two arguments should be replaced with a `verbose` argument that will output the finesse and intermediate states.**
+  """
   if not override_existing_file and os.path.isfile(filename):
     with open(filename, 'r') as input_file:
       N = int(input_file.readline().strip())
@@ -102,24 +110,30 @@ def generate_all_pc_queues(filename: str, num_pieces: int = 8, max_height: int  
     output_file.write("\n".join(pcs))
   return pcs
 
-# Determines the set of saves for a given pc queue ("X" if no save), given set of pcs.
-# piece_queue is a string containing the next pieces.
-# pcs is the set of all pc queues to consider.
 def get_pc_saves(piece_queue: str, pcs: set[str]) -> dict[str, str]:
+  """Determines the set of saves for a given piece queue, given set of pcs.
+
+  Returns a dictionary: `{saved_piece : pc_queue}`.
+  If `saved_piece` is `?`, then there is no saved piece at the end: all pieces were used.
+
+  `piece_queue` is a string containing the next pieces.
+
+  `pcs` is the set of all pc queues to consider.
+  """
   saves = {}
   for queue_order in board_lib.get_queue_orders(piece_queue):
     if queue_order[:-1] in pcs:
       saves[queue_order[-1]] = queue_order[:-1]
     if queue_order in pcs:
-      saves["X"] = queue_order
+      saves["?"] = queue_order
   return saves
 
-# Computes the maximum number of pcs that can be obtained in a queue.
-# piece_queue is a string containing the next pieces.
 def max_pcs_in_queue(piece_queue: str) -> tuple[int, list[str]]:
+  """Computes the maximum number of pcs that can be obtained in the given queue.
+  """
   pcs = set(generate_all_pc_queues(board_lib.PC_QUEUES_FILENAME))  # set of all pcs
   max_n = len(max(pcs, key = lambda _:len(_)))  # length of longest pc
-  piece_queue = piece_queue + "X"  # terminator character
+  piece_queue = piece_queue + "?"  # terminator character
   most_pcs_at_state = {(1, piece_queue[0]): (0, None, None)}  # (index, hold piece) -> (num pcs, previous state, previous solve)
   for index in range(1, len(piece_queue)):
     for hold in board_lib.PIECES:

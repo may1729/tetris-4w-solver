@@ -1,7 +1,9 @@
 ### IMPORTS ###
 
 from collections import deque
+import os.path
 import pickle
+import random
 import typing
 
 ### UTILITY FUNCTIONS ###
@@ -11,10 +13,10 @@ ROTATIONS = ["N", "E", "S", "W"]
 ROTATION_MOVES = ["0", "CW", "180", "CCW"]
 
 # File names
-PIECES_FILENAME = "../data/pieces.txt"
-KICKS_FILENAME = "../data/kicks.txt"
-CORNERS_FILENAME = "../data/corners.txt"
-PC_QUEUES_FILENAME = "../data/pc-queues.txt"
+PIECES_FILENAME = os.path.dirname(__file__) + "/../data/pieces.txt"
+KICKS_FILENAME = os.path.dirname(__file__) + "/../data/kicks.txt"
+CORNERS_FILENAME = os.path.dirname(__file__) + "/../data/corners.txt"
+PC_QUEUES_FILENAME = os.path.dirname(__file__) + "/../data/pc-queues.txt"
 
 # Types
 type Coordinate = tuple[int, int]
@@ -22,11 +24,13 @@ type CoordinateList = list[Coordinate]
 type CoordinateSet = set[Coordinate]
 type Board = list[list[int]]
 
-# Reads piece data from txt file.
-# Returns {piece: {orientation: [minos relative to center]}}
-# Stored as (y, x)
-# Center of piece should always be on second line second character
 def get_pieces_from_file(filename: str) -> dict[str, dict[int, CoordinateList]]:
+  """Reads piece data from a text file.
+
+  Returns a dictionary: `{piece: {orientation: [minos relative to center]}}`.
+  Coordinates are stored as `(y, x)`.
+  Center of piece should always be on the second line second character.
+  """
   pieces = {}
   with open(filename, 'r') as input_file:
     piece_list = input_file.readline().strip()
@@ -46,17 +50,19 @@ def get_pieces_from_file(filename: str) -> dict[str, dict[int, CoordinateList]]:
 def get_piece_widths(pieces: dict[str, dict[int, CoordinateList]]) -> dict[str, int]:
   piece_widths = {}
   for piece in pieces:
-    left = min(pieces[piece][0], key=lambda k:k[0])
-    right = max(pieces[piece][0], key=lambda k:k[0])
+    left = min(pieces[piece][0], key=lambda k:k[0])[0]
+    right = max(pieces[piece][0], key=lambda k:k[0])[0]
     piece_widths[piece] = right - left
   return piece_widths
 
 PIECES = get_pieces_from_file(PIECES_FILENAME)
 PIECE_WIDTHS = get_piece_widths(PIECES)
 
-# Reads kick data from txt file.
-# Returns {piece: {orientation: {input: [offset order]}}}
 def get_kicks_from_file(filename: str) -> dict[str, dict[int, dict[int, CoordinateList]]]:
+  """Reads kick data from a text file.
+
+  Returns a dictionary: `{piece: {orientation: {input: [offset order]}}}`
+  """
   kicks = {}
   with open(filename, 'r') as input_file:
     for _p in range(7):
@@ -75,6 +81,10 @@ KICKS = get_kicks_from_file(KICKS_FILENAME)
 
 # Returns {piece: [list of corner_list]}
 def get_corners_from_file(filename: str) -> dict[str, list[CoordinateList]]:
+  """Reads corner data from a text file.
+
+  Returns a dictionary: `{piece: [list of corner_list]}`
+  """
   corners = {}
   with open(filename, 'r') as input_file:
     num_pieces = int(input_file.readline())
@@ -89,10 +99,11 @@ def get_corners_from_file(filename: str) -> dict[str, list[CoordinateList]]:
 
 CORNERS = get_corners_from_file(CORNERS_FILENAME)
 
-# Converts a board state to an integer.
-# Treats board state like binary string.
-# Bits are read top to bottom, and right to left within each row.
 def hash_board(board: Board) -> int:
+  """Converts a board state to an integer.
+
+  Treats board state like binary string. Bits are read top to bottom, and right to left within each row.
+  """
   board_hash = 0
   for row in reversed(board):
     for square in reversed(row):
@@ -100,8 +111,11 @@ def hash_board(board: Board) -> int:
       board_hash += square
   return board_hash
 
-# Converts an integer to a board state.
 def unhash_board(board_hash: int) -> Board:
+  """Converts an integer to a board state.
+
+  Treats board state like binary string. Bits are read top to bottom, and right to left within each row.
+  """
   board = []
   while board_hash > 0:
     row_hash = board_hash % 16
@@ -112,16 +126,16 @@ def unhash_board(board_hash: int) -> Board:
       row_hash //= 2
   return board
 
-# Computes number of minos in the board state corresponding to a hash.
 def num_minos(board_hash: int) -> int:
+  """Computes number of minos in the board state corresponding to a hash."""
   minos = 0
   while board_hash > 0:
     minos += board_hash % 2
     board_hash //= 2
   return minos
 
-# Obtains list of minos in the board.
 def get_mino_list(board: Board) -> CoordinateList:
+  """Obtains list of minos in the board."""
   mino_list = []
   for y in range(len(board)):
     for x in range(4):
@@ -129,8 +143,8 @@ def get_mino_list(board: Board) -> CoordinateList:
         mino_list.append((y, x))
   return mino_list
 
-# Obtains list of ways to insert at most max_lines lines into a board
 def lines_to_insert(board_height: int, max_lines: int) -> typing.Generator[tuple[int, ...]]:
+  """Obtains list of ways to insert at most `max_lines` lines into a board."""
   if max_lines == 1:
     yield ()
     for height in range(board_height+1):
@@ -144,8 +158,19 @@ def lines_to_insert(board_height: int, max_lines: int) -> typing.Generator[tuple
     else:
       yield ()
 
-# Obtains all queues (ignoring bag structure) of length n
+def generate_7bag():
+    """Generates an infinite number of 7bag pieces."""
+    pieces = list(PIECES.keys())
+    index = len(pieces)
+    while True:
+      if index == len(pieces):
+        random.shuffle(pieces)
+        index = 0
+      yield pieces[index]
+      index += 1
+
 def all_queues(queue_length: int) -> typing.Generator[str]:
+  """Generates all queues (ignoring bag structure) of length `queue_length`"""
   if queue_length <= 0:
     yield ""
   else:
@@ -153,8 +178,8 @@ def all_queues(queue_length: int) -> typing.Generator[str]:
       for queue in all_queues(queue_length-1):
         yield queue + piece
 
-# Obtains all possible ways to play a queue given one hold.
 def get_queue_orders(queue: str) -> typing.Generator[str]:
+  """Obtains all possible ways to play a queue given one hold."""
   if len(queue) == 1:
     yield queue[0]
     return
@@ -163,8 +188,8 @@ def get_queue_orders(queue: str) -> typing.Generator[str]:
   for queue_order in get_queue_orders(queue[0] + queue[2:]):
     yield queue[1] + queue_order
 
-# Determines if a piece location is in board bounds and does not intersect board
 def is_piece_location_valid(mino_set: CoordinateSet, mino_offsets: CoordinateList, piece_y: int, piece_x: int):
+  """Determines if a piece location is in board bounds and does not intersect board."""
   for (offset_y, offset_x) in mino_offsets:
     y = piece_y + offset_y
     x = piece_x + offset_x
@@ -172,9 +197,12 @@ def is_piece_location_valid(mino_set: CoordinateSet, mino_offsets: CoordinateLis
       return False
   return True
 
-# Determines if a piece location and rotation counts as a spin under 3 corner handheld rule.
-# Assume initial location is valid and previous action is a rotation.
 def is_piece_location_spin(mino_set: CoordinateSet, piece: str, rotation: int, piece_y: int, piece_x: int):
+  """Determines if a piece location and rotation counts as a spin under 3 corner handheld rule.
+
+  Assumes initial location is valid.
+  Assumes previous action is a rotation.
+  """
   if piece not in CORNERS:
     return False
   corner_count = 0
@@ -191,9 +219,13 @@ def is_piece_location_spin(mino_set: CoordinateSet, piece: str, rotation: int, p
 
 # Compute vertical position of piece after sonic drop, assuming initial location is valid
 def get_gravity_y(mino_set: CoordinateSet, mino_offsets: CoordinateList, start_y: int, start_x: int):
+  """Compute vertical position of piece after sonic drop.
+  
+  Assumes initial location is valid.
+  """
   current_y = start_y - 1
   floor_y = -min([offset[0] for offset in mino_offsets])
-  while current_y >= floor_y:    
+  while current_y >= floor_y:
     is_floating = True
     for (offset_y, offset_x) in mino_offsets:
       if (current_y + offset_y, start_x + offset_x) in mino_set:
@@ -205,31 +237,34 @@ def get_gravity_y(mino_set: CoordinateSet, mino_offsets: CoordinateList, start_y
   current_y += 1
   return current_y
 
-# Displays a board
 def display_board(board_hash: int) -> None:
+  """Displays a board."""
   board = unhash_board(board_hash)
   print("|    |")
   for row in reversed(board):
     print(f"|{''.join([[' ', '#'][_] for _ in row])}|")
   print("+----+")
 
-# Displays a list of boards
 def display_boards(board_hash_list: list) -> None:
+  """Displays a list of boards."""
   for board_hash in board_hash_list:
     display_board(board_hash)
     print()
 
-# Score a mino count
-# This is based on distance from 6, 9, 12, 15 minos
-# Also make it really dislike 4res
 def score_num_minos(mino_count: int) -> int:
+  """Return mino score of a board with given mino count of `mino_count`.
+
+  This is used for an additional tiebreak on assessing board quality.
+  This is based on distance from 6, 9, 12, or 15 minos.
+  This also strongly dislikes a mino count of 4.
+  """
   if mino_count == 4:
     return 400
   target = [12, 9, 6, 15][mino_count % 4]
   return abs(mino_count - target)
 
-# Obtains queues that with the given hold could place the specified pieces
 def get_input_queues_for_output_sequence(target: str, hold: str) -> typing.Generator[str]:
+  """Obtains queues that with the given hold could place the specified pieces."""
   if len(target) == 0:
     yield ""
   elif target[0] == hold:
@@ -242,13 +277,21 @@ def get_input_queues_for_output_sequence(target: str, hold: str) -> typing.Gener
 
 ### MAIN FUNCTIONS ###
 
-# Computes all possible piece placements given board and piece.
-# Returns a list of all possible boards, with their finesse
-# If no_breaks is True, then only returns placements that do not break combo
-# Assume 100g.
-# board_hash is the hash of the input board.
-# piece is the next piece.
 def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180: bool = True) -> dict[int, tuple[bool, list[str]]]:
+  """Computes all possible piece placements given board and piece.
+
+  Returns a list of all possible boards, with their finesse.
+
+  `board_hash` is the hash of the input board.
+
+  `piece` is the next piece.
+
+  If `no_breaks` is True, then only returns placements that do not break combo.
+
+  If `can180` is False, then excludes all 180 finesse.
+
+  Assumes 100g.
+  """
   # Ensure piece is valid
   if piece not in PIECES:
     return {}
@@ -262,12 +305,12 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
   
   # State is (y, x, rotation)
   queue = deque()
-  queue.append(((y, 1, 0), False))
+  queue.append(((y, 1, 0), False))  # Base case
   # Set of states visited in queue
   visited = set()
   # (current state, is_spin) -> (previous state, keypress list)
   previous = {}
-  previous[((y, 1, 0), False)] = (None, ())
+  previous[((y, 1, 0), False)] = (None, ())  # Base case
   
   # BFS on all possible ending locations for piece, assuming 100g
   while len(queue) > 0:
@@ -299,7 +342,7 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
           rotated_x_position = kick_offset_x + x
           if is_piece_location_valid(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position):
             # gravity
-            new_y_position = get_gravity_y(mino_set, PIECES[piece][rotation], rotated_y_position, rotated_x_position)
+            new_y_position = get_gravity_y(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position)
             newState = (new_y_position, rotated_x_position, new_rotation)
             if rotated_y_position != new_y_position:
               queue.append((newState, False))
@@ -320,7 +363,7 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
     
     new_hash = board_hash
     for (offset_y, offset_x) in PIECES[piece][rotation]:
-      new_hash += 2**(4 * (y + offset_y) + x + offset_x)
+      new_hash += int(2**(4 * (y + offset_y) + x + offset_x))
     new_board = unhash_board(new_hash)
 
     # Remove completed lines and check for breaks
@@ -348,10 +391,15 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
   
   return boards
 
-# Computes all possible board states at the end of the given queue.
-# board_hash is the hash of the input board.
-# queue is a string containing the next pieces.
 def get_next_boards_given_queue(board_hash: int, queue: str) -> list[int]:
+  """Computes all possible board states at the end of the given queue.
+
+  Returns a list of attainable board hashes.
+
+  `board_hash` is the hash of the input board.
+
+  `queue` is a string containing the next pieces.
+  """
   boards = set([board_hash])
   for piece in queue:
     new_boards = set()
@@ -360,14 +408,21 @@ def get_next_boards_given_queue(board_hash: int, queue: str) -> list[int]:
     boards = new_boards
   return sorted(boards)
 
-# Computes all possible previous piece placements given board and previous piece
-# Returns a list of all possible previous boards.
-# Assume 100g.
-# board_hash is the hash of the input board.
-# piece is the next piece.
-# forwards_saved_transitions is a cache of the transitions of board states in the forwards direction.
-def get_previous_boards(board_hash: int, piece: str, forwards_saved_transitions: dict | None = None) -> list[int]:
+def get_previous_boards(board_hash: int, piece: str, can180: bool = True, forwards_saved_transitions: dict | None = None) -> list[int]:
+  """Computes all possible previous piece boards given board and piece.
 
+  Returns a list of all possible previous boards such that placing the given piece somewhere in the board would result in the given board.
+
+  `board_hash` is the hash of the input board.
+
+  `piece` is the previous piece.
+
+  If `can180` is False, then excludes all 180 finesse.
+
+  `forwards_saved_transitions` is a cache containing the saved results of `get_next_boards`.
+
+  Assumes 100g.
+  """
   if forwards_saved_transitions is None:
     forwards_saved_transitions = {}
   
@@ -414,16 +469,21 @@ def get_previous_boards(board_hash: int, piece: str, forwards_saved_transitions:
   boards = []
   for candidate_previous_board in candidate_previous_boards:
     if (candidate_previous_board, piece) not in forwards_saved_transitions:
-      forwards_saved_transitions[(candidate_previous_board, piece)] = get_next_boards(candidate_previous_board, piece)
+      forwards_saved_transitions[(candidate_previous_board, piece)] = get_next_boards(candidate_previous_board, piece, can180=can180)
     if board_hash in forwards_saved_transitions[(candidate_previous_board, piece)]:
       boards.append(candidate_previous_board)
   
   return boards
 
-# Computes all possible board states that at the end of the given queue results in the given board.
-# board_hash is the hash of the input board.
-# queue is a string containing the next pieces.
 def get_previous_boards_given_queue(board_hash: int, queue: str) -> list[int]:
+  """Computes all possible board states that at the end of the given queue results in the given board.
+
+  Returns a list of starting board hashes.
+
+  `board_hash` is the hash of the input board.
+
+  `queue` is a string containing the previous pieces.
+  """
   boards = set([board_hash])
   forwards_saved_transitions = {}
   for piece in reversed(queue):
@@ -433,13 +493,13 @@ def get_previous_boards_given_queue(board_hash: int, queue: str) -> list[int]:
     boards = prev_boards
   return sorted(boards)
 
-# saves transition_cache to pickle
 def save_transition_cache(transition_cache: dict, filename: str) -> None:
+  """Saves `transition_cache` to `pickle`."""
   with open(filename, 'wb') as output_file:
     pickle.dump(transition_cache, output_file)
 
-# load transition_cache from pickle
 def load_transition_cache(filename: str) -> None:
+  """Loads `transition_cache` from `pickle`."""
   with open(filename, 'rb') as input_file:
     transition_cache = pickle.load(input_file)
   return transition_cache
