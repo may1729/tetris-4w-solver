@@ -1,5 +1,3 @@
-### IMPORTS ###
-
 from collections import deque
 import os.path
 import pickle
@@ -50,9 +48,9 @@ def get_pieces_from_file(filename: str) -> dict[str, dict[int, CoordinateList]]:
 def get_piece_widths(pieces: dict[str, dict[int, CoordinateList]]) -> dict[str, int]:
   piece_widths = {}
   for piece in pieces:
-    left = min(pieces[piece][0], key=lambda k:k[0])[0]
-    right = max(pieces[piece][0], key=lambda k:k[0])[0]
-    piece_widths[piece] = right - left
+    left = min(pieces[piece][0], key=lambda k:k[1])[1]
+    right = max(pieces[piece][0], key=lambda k:k[1])[1]
+    piece_widths[piece] = right - left + 1
   return piece_widths
 
 PIECES = get_pieces_from_file(PIECES_FILENAME)
@@ -98,6 +96,14 @@ def get_corners_from_file(filename: str) -> dict[str, list[CoordinateList]]:
   return corners
 
 CORNERS = get_corners_from_file(CORNERS_FILENAME)
+
+# Finesse strings
+FINESSE_L = "l"
+FINESSE_R = "r"
+FINESSE_CW = "cw"
+FINESSE_CCW = "ccw"
+FINESSE_180 = "f"
+FINESSE_SD = "sd"
 
 def hash_board(board: Board) -> int:
   """Converts a board state to an integer.
@@ -217,7 +223,6 @@ def is_piece_location_spin(mino_set: CoordinateSet, piece: str, rotation: int, p
       corner_count += 1
   return corner_count >= 3
 
-# Compute vertical position of piece after sonic drop, assuming initial location is valid
 def get_gravity_y(mino_set: CoordinateSet, mino_offsets: CoordinateList, start_y: int, start_x: int):
   """Compute vertical position of piece after sonic drop.
   
@@ -236,6 +241,10 @@ def get_gravity_y(mino_set: CoordinateSet, mino_offsets: CoordinateList, start_y
     current_y -= 1
   current_y += 1
   return current_y
+
+def get_finesse_number(finesse_list: list[list[str]]):
+  """Returns total number of keypresses to execute the finesse of the queue specified by the list."""
+  return sum(len(piece_finesse) for piece_finesse in finesse_list)
 
 def display_board(board_hash: int) -> None:
   """Displays a board."""
@@ -320,7 +329,7 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
       ((y, x, rotation), is_current_spin) = current
       
       # test movement
-      valid_movement_list = ((-1, "moveLeft"), (1, "moveRight"))
+      valid_movement_list = ((-1, FINESSE_L), (1, FINESSE_R))
       for (x_move, x_finesse) in valid_movement_list:
         new_y = y
         if is_piece_location_valid(mino_set, PIECES[piece][rotation], y, x + x_move):
@@ -329,12 +338,12 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
           queue.append((newState, False))
           if (newState, False) not in previous:
             if new_y != y:
-              previous[(newState, False)] = (current, (x_finesse, "softDrop"))
+              previous[(newState, False)] = (current, (x_finesse, FINESSE_SD))
             else:
               previous[(newState, False)] = (current, (x_finesse,))
       
       # test rotation
-      valid_rotation_list = ((1, "rotateCW"), (2, "rotate180"), (3, "rotateCCW")) if can180 else ((1, "rotateCW"), (3, "rotateCCW"))
+      valid_rotation_list = ((1, FINESSE_CW), (2, FINESSE_180), (3, FINESSE_CCW)) if can180 else ((1, FINESSE_CW), (3, FINESSE_CCW))
       for (rotation_move, rotation_finesse) in valid_rotation_list:
         new_rotation = (rotation + rotation_move) % 4
         for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
@@ -347,7 +356,7 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
             if rotated_y_position != new_y_position:
               queue.append((newState, False))
               if (newState, False) not in previous:
-                previous[(newState, False)] = (current, (rotation_finesse, "softDrop"))
+                previous[(newState, False)] = (current, (rotation_finesse, FINESSE_SD))
             else:
               # check for spins
               is_spin = is_piece_location_spin(mino_set, piece, new_rotation, new_y_position, rotated_x_position)
@@ -380,6 +389,7 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
       finesse = []
       for finesse_group in reversed(finesse_groups):
         finesse += finesse_group
+      finesse = tuple(finesse)
       
       cleared_board_hash = hash_board(cleared_board)
       if (
@@ -408,7 +418,7 @@ def get_next_boards_given_queue(board_hash: int, queue: str) -> list[int]:
     boards = new_boards
   return sorted(boards)
 
-def get_previous_boards(board_hash: int, piece: str, can180: bool = True, forwards_saved_transitions: dict | None = None) -> list[int]:
+def get_previous_boards(board_hash: int, piece: str, can180: bool = True, forwards_saved_transitions: dict | None = None) -> dict[int, tuple[bool, list[str]]]:
   """Computes all possible previous piece boards given board and piece.
 
   Returns a list of all possible previous boards such that placing the given piece somewhere in the board would result in the given board.
@@ -466,12 +476,12 @@ def get_previous_boards(board_hash: int, piece: str, can180: bool = True, forwar
   
   candidate_previous_boards = sorted(candidate_previous_boards)
   # Ensure it is possible to reach current board state from each candidate previous board state
-  boards = []
+  boards = {}
   for candidate_previous_board in candidate_previous_boards:
     if (candidate_previous_board, piece) not in forwards_saved_transitions:
       forwards_saved_transitions[(candidate_previous_board, piece)] = get_next_boards(candidate_previous_board, piece, can180=can180)
     if board_hash in forwards_saved_transitions[(candidate_previous_board, piece)]:
-      boards.append(candidate_previous_board)
+      boards[candidate_previous_board] = forwards_saved_transitions[(candidate_previous_board, piece)][board_hash]
   
   return boards
 

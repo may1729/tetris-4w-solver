@@ -1,5 +1,3 @@
-### IMPORTS ###
-
 import lib.board_lib as board_lib
 
 from collections import defaultdict, deque
@@ -330,13 +328,24 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
     # print("FK", flush = True)
   
   (end_hold, end_hash) = best_end_state
+
+  # output for bot
   finesse_list = []
   used = queue[1]
   if end_hold != queue[0]:
     used = queue[0]
     finesse_list.append("hold")
-  finesse_list += _cached_get_next_boards(board_hash, used, 1, can180)[end_hash][1]
-  # output for bot
+  # This is such a scuffed pipeline we better fix this
+  finesse_transform = {
+    board_lib.FINESSE_L : "moveLeft",
+    board_lib.FINESSE_R : "moveRight",
+    board_lib.FINESSE_CW : "rotateCW",
+    board_lib.FINESSE_CCW : "rotateCCW",
+    board_lib.FINESSE_180 : "rotate180",
+    board_lib.FINESSE_SD : "softDrop"
+  }
+  for untransformed_finesse in _cached_get_next_boards(board_hash, used, 1, can180)[end_hash][1]:
+    finesse_list.append(finesse_transform[untransformed_finesse])
   print(f"{used} {','.join(finesse_list)}")
   
   return best_end_state
