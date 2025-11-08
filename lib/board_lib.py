@@ -523,7 +523,7 @@ def recompute_caches() -> None:
       keys_to_update[simplified_key] = set()
     keys_to_update[simplified_key].add(cache_key)
   
-  print(f"Processing {len(keys_to_update)} keys...", flush = True)
+  # print(f"Processing {len(keys_to_update)} keys...", flush = True)
   pruned = 0
 
   # Recompute each key
@@ -540,7 +540,7 @@ def recompute_caches() -> None:
     for cache_key in keys_to_update[simplified_key]:
       SIMPLIFICATION_CACHE[cache_key] = new_simplified_hash
   
-  print(f"Pruned {pruned} keys.", flush = True)
+  # print(f"Pruned {pruned} keys.", flush = True)
 
 def get_next_boards_given_queue(board_hash: BoardHash, queue: Queue) -> List[BoardHash]:
   """Computes all possible board states at the end of the given queue.
