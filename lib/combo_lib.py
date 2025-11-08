@@ -1,8 +1,9 @@
 import lib.board_lib as board_lib
-
+from lib.board_lib import Board, BoardHash, Coordinate, CoordinateList, CoordinateSet, Finesse, Piece, PieceFinesse, Queue
 from collections import defaultdict, deque
 import random
 import time
+from typing import Dict, List, Optional, Set, Tuple, TypeAlias
 
 # Computes best next board state for board state sequence
 # that results in the fewest non line clears
@@ -10,7 +11,7 @@ import time
 # Among those, the one with the fewest minos
 # Returns the piece used and the next board hash
 # If build_up_now is True, then will prioritize upstacking to target minos over not breaking
-def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, can180: bool = True, canHold: bool = True, build_up_now: bool = False, transition_cache: dict | None = None, foresight_cache: dict | None = None) -> tuple[str, int]:
+def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, can180: bool = True, canHold: bool = True, build_up_now: bool = False, foresight_cache: dict | None = None) -> tuple[str, int]:
   """Computes best next board state.
 
   First, attempts to minimize number of placements over the next `len(queue) - 1` pieces that do not clear a line.
@@ -32,8 +33,6 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
 
   If `build_up_now` is True, then will prioritize upstacking to target number of minos over not breaking.
   """
-  if transition_cache is None:
-    transition_cache = {}
   if foresight_cache is None:
     foresight_cache = {}
 
@@ -43,14 +42,6 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
     queue = "?" + queue
   
   BREAKS_LIMIT = len(queue) # ignore anything with more than BREAKS_LIMIT breaks
-
-  # Cache the next boards. (board_hash, piece, no_breaks) -> reachable boards
-  saved_next_boards = transition_cache
-  def _cached_get_next_boards(_board_hash, _piece, _num_breaks, can180):
-    _no_breaks = (_num_breaks == 0)
-    if (_board_hash, _piece, _no_breaks, can180) not in saved_next_boards:
-      saved_next_boards[(_board_hash, _piece, _no_breaks, can180)] = board_lib.get_next_boards(_board_hash, _piece, _no_breaks, can180)
-    return saved_next_boards[(_board_hash, _piece, _no_breaks, can180)]
 
   # (hold, board_state) -> {(hold, queue_index, ending_board_state) -> num_spins}
   immediate_placements = {}
@@ -83,7 +74,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
             current_state = (hold, queue_index, current_board_hash)
             # Test not using hold, then using hold piece
             for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-              for next_board_hash in _cached_get_next_boards(current_board_hash, next_used, 1, can180):
+              for next_board_hash in board_lib.get_next_boards(current_board_hash, next_used, False, can180):
                 next_state = (next_hold, queue_index + 1, next_board_hash)
                 immediate_placement_state = (next_hold, next_board_hash)
                 if next_state not in least_breaks:
@@ -117,7 +108,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
         # Test not using hold, then using hold piece
         current_mino_count = board_lib.num_minos(board_state)
         for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-          for next_board_hash in _cached_get_next_boards(board_state, next_used, 1, can180):
+          for next_board_hash in board_lib.get_next_boards(board_state, next_used, False, can180):
             # only allow breaks
             next_state = (next_hold, queue_index + 1, next_board_hash)
             immediate_placement_state = (next_hold, next_board_hash)
@@ -159,7 +150,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
 
         # Test not using hold, then using hold piece
         for (next_used, next_hold) in ((queue[queue_index], hold), (hold, queue[queue_index])):
-          next_board_dictionary = _cached_get_next_boards(current_board_hash, next_used, 0, can180)
+          next_board_dictionary = board_lib.get_next_boards(current_board_hash, next_used, True, can180)
           for next_board_hash in next_board_dictionary:
             next_state = (next_hold, queue_index + 1, next_board_hash)
             is_spin = next_board_dictionary[next_board_hash][0]
@@ -234,7 +225,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
             (foresight_queue_index, foresight_board_hash) = current_state
             current_mino_count = board_lib.num_minos(foresight_board_hash)
 
-            for next_board_hash in _cached_get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index], 0, can180):
+            for next_board_hash in board_lib.get_next_boards(foresight_board_hash, foresight_queue[foresight_queue_index], True, can180):
               next_state = (foresight_queue_index + 1, next_board_hash)
               next_mino_count = board_lib.num_minos(next_board_hash)
               if next_mino_count <= current_mino_count:
@@ -344,7 +335,7 @@ def get_best_next_combo_state(board_hash: int, queue: str, foresight: int = 1, c
     board_lib.FINESSE_180 : "rotate180",
     board_lib.FINESSE_SD : "softDrop"
   }
-  for untransformed_finesse in _cached_get_next_boards(board_hash, used, 1, can180)[end_hash][1]:
+  for untransformed_finesse in board_lib.get_next_boards(board_hash, used, False, can180)[end_hash][1]:
     finesse_list.append(finesse_transform[untransformed_finesse])
   print(f"{used} {','.join(finesse_list)}")
   
@@ -439,21 +430,23 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
   well_multiplier = (16**well_height - 1)//15
   wells = [row_code * well_multiplier for row_code in [7, 11, 13, 14]]
 
-  tc = {}
   fc = {}
   
   if tc_cache_filename is not None:
-    try:
-      tc = board_lib.load_transition_cache(tc_cache_filename)
-    except:
-      tc = {}
+    board_lib.load_caches(tc_cache_filename, True)
 
   for decision_num in range(simulation_length):
     # compute next state
-    upstack = (board_lib.num_minos(current_hash) < 12)
+    num_minos = board_lib.num_minos(current_hash)
+    upstack = (num_minos in [0, 1, 2, 4, 5])
     next_queue = hold + window if canHold else window
     time_start = time.time()
-    next_state = get_best_next_combo_state(current_hash, next_queue, foresight, build_up_now=upstack, canHold=canHold, transition_cache=tc, foresight_cache=fc)
+
+    #try:
+    next_state = get_best_next_combo_state(current_hash, next_queue, foresight, build_up_now=upstack, canHold=canHold, foresight_cache=fc)
+    #except:
+      #board_lib.save_caches("data/corrupted")
+      #break
     time_elapsed = time.time() - time_start
     (hold, current_hash) = next_state
     combo_decisions.append(next_state)
@@ -490,6 +483,7 @@ def simulate_inf_ds(simulation_length: int = 1000, lookahead: int = 6, foresight
     height += 1
   print(height)
 
-  board_lib.save_transition_cache(tc, tc_cache_filename)
+  if tc_cache_filename != None:
+    board_lib.save_caches(tc_cache_filename)
 
   return combo_decisions

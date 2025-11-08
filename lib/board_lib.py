@@ -2,7 +2,7 @@ from collections import deque
 import os.path
 import pickle
 import random
-import typing
+from typing import Dict, Generator, List, Optional, Set, Tuple, TypeAlias, Callable
 
 ### UTILITY FUNCTIONS ###
 
@@ -17,12 +17,17 @@ CORNERS_FILENAME = os.path.dirname(__file__) + "/../data/corners.txt"
 PC_QUEUES_FILENAME = os.path.dirname(__file__) + "/../data/pc-queues.txt"
 
 # Types
-type Coordinate = tuple[int, int]
-type CoordinateList = list[Coordinate]
-type CoordinateSet = set[Coordinate]
-type Board = list[list[int]]
+Piece: TypeAlias = str
+Queue: TypeAlias = str
+Coordinate: TypeAlias = Tuple[int, int]
+CoordinateList: TypeAlias = List[Coordinate]
+CoordinateSet: TypeAlias = Set[Coordinate]
+Board: TypeAlias = List[List[int]]
+BoardHash: TypeAlias = int
+Finesse: TypeAlias = str
+PieceFinesse: TypeAlias = List[Finesse]
 
-def get_pieces_from_file(filename: str) -> dict[str, dict[int, CoordinateList]]:
+def get_pieces_from_file(filename: str) -> Dict[Piece, Dict[int, CoordinateList]]:
   """Reads piece data from a text file.
 
   Returns a dictionary: `{piece: {orientation: [minos relative to center]}}`.
@@ -45,7 +50,7 @@ def get_pieces_from_file(filename: str) -> dict[str, dict[int, CoordinateList]]:
         minos = [(-x, y) for (y, x) in minos]
   return pieces
 
-def get_piece_widths(pieces: dict[str, dict[int, CoordinateList]]) -> dict[str, int]:
+def get_piece_widths(pieces: Dict[Piece, Dict[int, CoordinateList]]) -> Dict[Piece, int]:
   piece_widths = {}
   for piece in pieces:
     left = min(pieces[piece][0], key=lambda k:k[1])[1]
@@ -56,7 +61,7 @@ def get_piece_widths(pieces: dict[str, dict[int, CoordinateList]]) -> dict[str, 
 PIECES = get_pieces_from_file(PIECES_FILENAME)
 PIECE_WIDTHS = get_piece_widths(PIECES)
 
-def get_kicks_from_file(filename: str) -> dict[str, dict[int, dict[int, CoordinateList]]]:
+def get_kicks_from_file(filename: str) -> Dict[Piece, Dict[int, Dict[int, CoordinateList]]]:
   """Reads kick data from a text file.
 
   Returns a dictionary: `{piece: {orientation: {input: [offset order]}}}`
@@ -77,8 +82,7 @@ def get_kicks_from_file(filename: str) -> dict[str, dict[int, dict[int, Coordina
 
 KICKS = get_kicks_from_file(KICKS_FILENAME)
 
-# Returns {piece: [list of corner_list]}
-def get_corners_from_file(filename: str) -> dict[str, list[CoordinateList]]:
+def get_corners_from_file(filename: str) -> Dict[Piece, List[CoordinateList]]:
   """Reads corner data from a text file.
 
   Returns a dictionary: `{piece: [list of corner_list]}`
@@ -97,15 +101,16 @@ def get_corners_from_file(filename: str) -> dict[str, list[CoordinateList]]:
 
 CORNERS = get_corners_from_file(CORNERS_FILENAME)
 
-# Finesse strings
-FINESSE_L = "l"
-FINESSE_R = "r"
-FINESSE_CW = "cw"
-FINESSE_CCW = "ccw"
-FINESSE_180 = "f"
-FINESSE_SD = "sd"
+# Finesse values
+FINESSE_L = 0
+FINESSE_R = 1
+FINESSE_CW = 2
+FINESSE_CCW = 3
+FINESSE_180 = 4
+FINESSE_SD = 5
+FINESSE_HOLD = 6
 
-def hash_board(board: Board) -> int:
+def hash_board(board: Board) -> BoardHash:
   """Converts a board state to an integer.
 
   Treats board state like binary string. Bits are read top to bottom, and right to left within each row.
@@ -117,7 +122,7 @@ def hash_board(board: Board) -> int:
       board_hash += square
   return board_hash
 
-def unhash_board(board_hash: int) -> Board:
+def unhash_board(board_hash: BoardHash) -> Board:
   """Converts an integer to a board state.
 
   Treats board state like binary string. Bits are read top to bottom, and right to left within each row.
@@ -132,7 +137,9 @@ def unhash_board(board_hash: int) -> Board:
       row_hash //= 2
   return board
 
-def num_minos(board_hash: int) -> int:
+EMPTY_BOARD_HASH: BoardHash = 0  # Board hash of empty board
+
+def num_minos(board_hash: BoardHash) -> int:
   """Computes number of minos in the board state corresponding to a hash."""
   minos = 0
   while board_hash > 0:
@@ -149,7 +156,7 @@ def get_mino_list(board: Board) -> CoordinateList:
         mino_list.append((y, x))
   return mino_list
 
-def lines_to_insert(board_height: int, max_lines: int) -> typing.Generator[tuple[int, ...]]:
+def lines_to_insert(board_height: int, max_lines: int) -> Generator[Tuple[int, ...]]:
   """Obtains list of ways to insert at most `max_lines` lines into a board."""
   if max_lines == 1:
     yield ()
@@ -164,7 +171,7 @@ def lines_to_insert(board_height: int, max_lines: int) -> typing.Generator[tuple
     else:
       yield ()
 
-def generate_7bag():
+def generate_7bag() -> Generator[Piece]:
     """Generates an infinite number of 7bag pieces."""
     pieces = list(PIECES.keys())
     index = len(pieces)
@@ -175,7 +182,7 @@ def generate_7bag():
       yield pieces[index]
       index += 1
 
-def all_queues(queue_length: int) -> typing.Generator[str]:
+def all_queues(queue_length: int) -> Generator[Queue]:
   """Generates all queues (ignoring bag structure) of length `queue_length`"""
   if queue_length <= 0:
     yield ""
@@ -184,7 +191,7 @@ def all_queues(queue_length: int) -> typing.Generator[str]:
       for queue in all_queues(queue_length-1):
         yield queue + piece
 
-def get_queue_orders(queue: str) -> typing.Generator[str]:
+def get_queue_orders(queue: Queue) -> Generator[Queue]:
   """Obtains all possible ways to play a queue given one hold."""
   if len(queue) == 1:
     yield queue[0]
@@ -203,7 +210,7 @@ def is_piece_location_valid(mino_set: CoordinateSet, mino_offsets: CoordinateLis
       return False
   return True
 
-def is_piece_location_spin(mino_set: CoordinateSet, piece: str, rotation: int, piece_y: int, piece_x: int):
+def is_piece_location_spin(mino_set: CoordinateSet, piece: Piece, rotation: int, piece_y: int, piece_x: int):
   """Determines if a piece location and rotation counts as a spin under 3 corner handheld rule.
 
   Assumes initial location is valid.
@@ -242,11 +249,11 @@ def get_gravity_y(mino_set: CoordinateSet, mino_offsets: CoordinateList, start_y
   current_y += 1
   return current_y
 
-def get_finesse_number(finesse_list: list[list[str]]):
+def get_finesse_number(finesse_list: List[PieceFinesse]):
   """Returns total number of keypresses to execute the finesse of the queue specified by the list."""
   return sum(len(piece_finesse) for piece_finesse in finesse_list)
 
-def display_board(board_hash: int) -> None:
+def display_board(board_hash: BoardHash) -> None:
   """Displays a board."""
   board = unhash_board(board_hash)
   print("|    |")
@@ -254,7 +261,7 @@ def display_board(board_hash: int) -> None:
     print(f"|{''.join([[' ', '#'][_] for _ in row])}|")
   print("+----+")
 
-def display_boards(board_hash_list: list) -> None:
+def display_boards(board_hash_list: List[BoardHash]) -> None:
   """Displays a list of boards."""
   for board_hash in board_hash_list:
     display_board(board_hash)
@@ -272,7 +279,7 @@ def score_num_minos(mino_count: int) -> int:
   target = [12, 9, 6, 15][mino_count % 4]
   return abs(mino_count - target)
 
-def get_input_queues_for_output_sequence(target: str, hold: str) -> typing.Generator[str]:
+def get_input_queues_for_output_sequence(target: Queue, hold: Piece) -> Generator[Queue]:
   """Obtains queues that with the given hold could place the specified pieces."""
   if len(target) == 0:
     yield ""
@@ -284,12 +291,22 @@ def get_input_queues_for_output_sequence(target: str, hold: str) -> typing.Gener
     for queue in get_input_queues_for_output_sequence(target[1:], hold):
       yield target[0] + queue
 
-### MAIN FUNCTIONS ###
+### MAIN FUNCTIONS AND STRUCTURES ###
 
-def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180: bool = True) -> dict[int, tuple[bool, list[str]]]:
-  """Computes all possible piece placements given board and piece.
+# Results of get_next_boards
+TRANSITION_CACHE = {}
+# Board hash of board with equivalent finesse
+SIMPLIFICATION_CACHE = {}
 
-  Returns a list of all possible boards, with their finesse.
+def get_next_boards(
+    board_hash: BoardHash,
+    piece: Piece,
+    no_breaks: bool = False,
+    can180: bool = True
+  ) -> Dict[BoardHash, Tuple[bool, PieceFinesse]]:
+  """Computes and caches all possible piece placements given board and piece.
+
+  Returns a dictionary of all possible boards, with whether a spin was performed an their finesse.
 
   `board_hash` is the hash of the input board.
 
@@ -301,6 +318,24 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
 
   Assumes 100g.
   """
+  # Check to see if board_hash and piece is already in cache
+  cache_key = (board_hash, piece, no_breaks, can180)
+  
+  if cache_key in SIMPLIFICATION_CACHE:
+    simplified_hash = SIMPLIFICATION_CACHE[cache_key]
+    simplified_key = (simplified_hash, piece, no_breaks, can180)
+
+    # Get hash transformation function
+    simplified_hash = simplified_key[0]
+    unsimplify = create_unsimplify(board_hash, simplified_hash)
+
+    # Compute unsimplified hashes
+    boards = {}
+    for simplified_board in TRANSITION_CACHE[simplified_key]:
+      boards[unsimplify(simplified_board)] = TRANSITION_CACHE[simplified_key][simplified_board]
+
+    return boards
+
   # Ensure piece is valid
   if piece not in PIECES:
     return {}
@@ -324,46 +359,47 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
   # BFS on all possible ending locations for piece, assuming 100g
   while len(queue) > 0:
     current = queue.popleft()
-    if current not in visited:
-      visited.add(current)
-      ((y, x, rotation), is_current_spin) = current
-      
-      # test movement
-      valid_movement_list = ((-1, FINESSE_L), (1, FINESSE_R))
-      for (x_move, x_finesse) in valid_movement_list:
-        new_y = y
-        if is_piece_location_valid(mino_set, PIECES[piece][rotation], y, x + x_move):
-          new_y = get_gravity_y(mino_set, PIECES[piece][rotation], y, x + x_move)
-          newState = (new_y, x + x_move, rotation)
-          queue.append((newState, False))
-          if (newState, False) not in previous:
-            if new_y != y:
-              previous[(newState, False)] = (current, (x_finesse, FINESSE_SD))
-            else:
-              previous[(newState, False)] = (current, (x_finesse,))
-      
-      # test rotation
-      valid_rotation_list = ((1, FINESSE_CW), (2, FINESSE_180), (3, FINESSE_CCW)) if can180 else ((1, FINESSE_CW), (3, FINESSE_CCW))
-      for (rotation_move, rotation_finesse) in valid_rotation_list:
-        new_rotation = (rotation + rotation_move) % 4
-        for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
-          rotated_y_position = kick_offset_y + y
-          rotated_x_position = kick_offset_x + x
-          if is_piece_location_valid(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position):
-            # gravity
-            new_y_position = get_gravity_y(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position)
-            newState = (new_y_position, rotated_x_position, new_rotation)
-            if rotated_y_position != new_y_position:
-              queue.append((newState, False))
-              if (newState, False) not in previous:
-                previous[(newState, False)] = (current, (rotation_finesse, FINESSE_SD))
-            else:
-              # check for spins
-              is_spin = is_piece_location_spin(mino_set, piece, new_rotation, new_y_position, rotated_x_position)
-              queue.append((newState, is_spin))
-              if (newState, is_spin) not in previous:
-                previous[(newState, is_spin)] = (current, (rotation_finesse,))
-            break
+    if current in visited:
+      continue
+    visited.add(current)
+    ((y, x, rotation), is_current_spin) = current
+    
+    # test movement
+    valid_movement_list = ((-1, FINESSE_L), (1, FINESSE_R))
+    for (x_move, x_finesse) in valid_movement_list:
+      new_y = y
+      if is_piece_location_valid(mino_set, PIECES[piece][rotation], y, x + x_move):
+        new_y = get_gravity_y(mino_set, PIECES[piece][rotation], y, x + x_move)
+        newState = (new_y, x + x_move, rotation)
+        queue.append((newState, False))
+        if (newState, False) not in previous:
+          if new_y != y:
+            previous[(newState, False)] = (current, (x_finesse, FINESSE_SD))
+          else:
+            previous[(newState, False)] = (current, (x_finesse,))
+    
+    # test rotation
+    valid_rotation_list = ((1, FINESSE_CW), (2, FINESSE_180), (3, FINESSE_CCW)) if can180 else ((1, FINESSE_CW), (3, FINESSE_CCW))
+    for (rotation_move, rotation_finesse) in valid_rotation_list:
+      new_rotation = (rotation + rotation_move) % 4
+      for (kick_offset_y, kick_offset_x) in KICKS[piece][rotation][rotation_move]:
+        rotated_y_position = kick_offset_y + y
+        rotated_x_position = kick_offset_x + x
+        if is_piece_location_valid(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position):
+          # gravity
+          new_y_position = get_gravity_y(mino_set, PIECES[piece][new_rotation], rotated_y_position, rotated_x_position)
+          newState = (new_y_position, rotated_x_position, new_rotation)
+          if rotated_y_position != new_y_position:
+            queue.append((newState, False))
+            if (newState, False) not in previous:
+              previous[(newState, False)] = (current, (rotation_finesse, FINESSE_SD))
+          else:
+            # check for spins
+            is_spin = is_piece_location_spin(mino_set, piece, new_rotation, new_y_position, rotated_x_position)
+            queue.append((newState, is_spin))
+            if (newState, is_spin) not in previous:
+              previous[(newState, is_spin)] = (current, (rotation_finesse,))
+          break
   
   # Obtain board states
   # board_hash -> (is_spin, finesse)
@@ -379,29 +415,134 @@ def get_next_boards(board_hash: int, piece: str, no_breaks: bool = False, can180
     cleared_board = [_ for _ in new_board if 0 in _]
     kept_combo = len(cleared_board) != len(new_board)
 
+    # Check to see if meeting input specs
+    if no_breaks and not kept_combo:
+      continue
     # Compute finesse
-    if not no_breaks or kept_combo:
-      finesse_groups = []
-      current_state = ((y, x, rotation), is_spin)
-      while current_state is not None:
-        (current_state, finesse_group) = previous[current_state]
-        finesse_groups.append(finesse_group)
-      finesse = []
-      for finesse_group in reversed(finesse_groups):
-        finesse += finesse_group
-      finesse = tuple(finesse)
-      
-      cleared_board_hash = hash_board(cleared_board)
-      if (
-        cleared_board_hash not in boards
-        or (is_spin and not boards[cleared_board_hash][0])
-        or (is_spin == boards[cleared_board_hash][0] and len(finesse) < len(boards[cleared_board_hash][1]))
-      ):
-        boards[cleared_board_hash] = (is_spin, finesse)
+    finesse_groups = []
+    current_state = ((y, x, rotation), is_spin)
+    while current_state is not None:
+      (current_state, finesse_group) = previous[current_state]
+      finesse_groups.append(finesse_group)
+    finesse = []
+    for finesse_group in reversed(finesse_groups):
+      finesse += finesse_group
+    finesse = tuple(finesse)
+    
+    cleared_board_hash = hash_board(cleared_board)
+    if (
+      cleared_board_hash not in boards
+      or (is_spin and not boards[cleared_board_hash][0])
+      or (is_spin == boards[cleared_board_hash][0] and len(finesse) < len(boards[cleared_board_hash][1]))
+    ):
+      boards[cleared_board_hash] = (is_spin, finesse)
   
+  # Cache results
+  simplified_hash = simplify_board_hash(board_hash, piece, no_breaks, can180, boards)
+
+  # Only need to cache if this is the simplified board
+  if board_hash == simplified_hash:
+    TRANSITION_CACHE[cache_key] = boards
+
   return boards
 
-def get_next_boards_given_queue(board_hash: int, queue: str) -> list[int]:
+def create_unsimplify(board_hash: BoardHash, simplified_hash: BoardHash
+  ) -> Callable[[BoardHash], BoardHash]:
+  board_height = len(unhash_board(board_hash))
+  simplified_height = len(unhash_board(simplified_hash))
+  height_difference = board_height - simplified_height
+  height_multiplier = 16 ** height_difference
+  hash_difference = board_hash - simplified_hash * height_multiplier
+  # Linear transformation of hash
+  return lambda h: h * height_multiplier + hash_difference
+
+def simplify_board_hash(
+    board_hash: BoardHash,
+    piece: Piece,
+    no_breaks: bool,
+    can180: bool,
+    board_transition: Dict[BoardHash, Tuple[bool, PieceFinesse]]
+  ) -> BoardHash:
+  """Computes and caches equivalent board hash.
+  Finesse and final state will be identical between the two boards aside from adding rows at the bottom."""
+
+  # Key for the cache
+  cache_key = (board_hash, piece, no_breaks, can180)
+
+  # Check to see if board_hash is already in cache
+  if cache_key in SIMPLIFICATION_CACHE:
+    current_hash = SIMPLIFICATION_CACHE[cache_key]
+    return current_hash
+
+  board = unhash_board(board_hash)
+  height = len(board)
+  hash_factor = 16**height
+
+  # Compute hash of board without given number of bottom rows
+  for _ in range(height-1, 0, -1):
+    hash_factor //= 16
+    candidate_simplified_hash = board_hash//hash_factor
+    candidate_cache_key = (candidate_simplified_hash, piece, no_breaks, can180)
+    # Check to see if simplified hash is in tc
+    if candidate_cache_key not in TRANSITION_CACHE:
+      continue
+    candidate_transition = TRANSITION_CACHE[candidate_cache_key]
+    # Check to see if number of transitions are the same
+    if len(candidate_transition) != len(board_transition):
+      continue
+
+    # Check each transition hash for membership in candidate cache
+    missing_hash = False
+    for board_next_hash in board_transition:
+      candidate_next_hash = board_next_hash//hash_factor
+      if candidate_next_hash not in candidate_transition:
+        missing_hash = True
+        break
+      if candidate_transition[candidate_next_hash] != board_transition[board_next_hash]:
+        missing_hash = True
+        break
+    if missing_hash:
+      continue
+    # Candidate verified!
+    SIMPLIFICATION_CACHE[cache_key] = candidate_simplified_hash
+    return candidate_simplified_hash
+  
+  # No candidates found.
+  SIMPLIFICATION_CACHE[cache_key] = board_hash
+  return board_hash
+
+def recompute_caches() -> None:
+  """Recomputes caches, removing unneeded entries."""
+
+  # Get list of cache_key values
+  keys_to_update = {}
+  for cache_key in SIMPLIFICATION_CACHE:
+    simplified_hash = SIMPLIFICATION_CACHE[cache_key]
+    simplified_key = (simplified_hash, *cache_key[1:])
+    if simplified_key not in keys_to_update:
+      keys_to_update[simplified_key] = set()
+    keys_to_update[simplified_key].add(cache_key)
+  
+  print(f"Processing {len(keys_to_update)} keys...", flush = True)
+  pruned = 0
+
+  # Recompute each key
+  for simplified_key in keys_to_update:
+    SIMPLIFICATION_CACHE.pop(simplified_key)
+    new_simplified_hash = simplify_board_hash(*simplified_key, TRANSITION_CACHE[simplified_key])
+    # Check if hash remained the same
+    if new_simplified_hash == simplified_key[0]:
+      continue
+    pruned += 1
+    # Remove extraneous transition cache entry
+    TRANSITION_CACHE.pop(simplified_key)
+    # Update simplification cache keys to point at correct simplified key
+    for cache_key in keys_to_update[simplified_key]:
+      SIMPLIFICATION_CACHE[cache_key] = new_simplified_hash
+  
+  print(f"Pruned {pruned} keys.", flush = True)
+
+def get_next_boards_given_queue(board_hash: BoardHash, queue: Queue) -> List[BoardHash]:
   """Computes all possible board states at the end of the given queue.
 
   Returns a list of attainable board hashes.
@@ -418,10 +559,15 @@ def get_next_boards_given_queue(board_hash: int, queue: str) -> list[int]:
     boards = new_boards
   return sorted(boards)
 
-def get_previous_boards(board_hash: int, piece: str, can180: bool = True, forwards_saved_transitions: dict | None = None) -> dict[int, tuple[bool, list[str]]]:
+def get_previous_boards(
+    board_hash: BoardHash,
+    piece: Piece,
+    can180: bool = True,
+    forwards_saved_transitions: Optional[Dict[BoardHash, Tuple[bool, PieceFinesse]]] = None
+  ) -> Dict[BoardHash, tuple[bool, PieceFinesse]]:
   """Computes all possible previous piece boards given board and piece.
 
-  Returns a list of all possible previous boards such that placing the given piece somewhere in the board would result in the given board.
+  Returns a dictionary of all possible previous boards such that placing the given piece somewhere in the board would result in the given board.
 
   `board_hash` is the hash of the input board.
 
@@ -485,7 +631,7 @@ def get_previous_boards(board_hash: int, piece: str, can180: bool = True, forwar
   
   return boards
 
-def get_previous_boards_given_queue(board_hash: int, queue: str) -> list[int]:
+def get_previous_boards_given_queue(board_hash: BoardHash, queue: Queue) -> List[BoardHash]:
   """Computes all possible board states that at the end of the given queue results in the given board.
 
   Returns a list of starting board hashes.
@@ -503,13 +649,25 @@ def get_previous_boards_given_queue(board_hash: int, queue: str) -> list[int]:
     boards = prev_boards
   return sorted(boards)
 
-def save_transition_cache(transition_cache: dict, filename: str) -> None:
-  """Saves `transition_cache` to `pickle`."""
+def save_caches(filename: str, recompute: bool = True) -> None:
+  """Saves `TRANSITION_CACHE` and `SIMPLIFICATION_CACHE` to `pickle`."""
+  """Also optionally refactors caches."""
+  if recompute:
+    recompute_caches()
   with open(filename, 'wb') as output_file:
-    pickle.dump(transition_cache, output_file)
+    pickle.dump((TRANSITION_CACHE, SIMPLIFICATION_CACHE), output_file)
 
-def load_transition_cache(filename: str) -> None:
-  """Loads `transition_cache` from `pickle`."""
-  with open(filename, 'rb') as input_file:
-    transition_cache = pickle.load(input_file)
-  return transition_cache
+def load_caches(filename: str, recompute: bool = True) -> None:
+  """
+  Loads `TRANSITION_CACHE` and `SIMPLIFICATION_CACHE` from `pickle`.
+  Also optionally refactors caches.
+  """
+  global TRANSITION_CACHE
+  global SIMPLIFICATION_CACHE
+  try:
+    with open(filename, 'rb') as input_file:
+      (TRANSITION_CACHE, SIMPLIFICATION_CACHE) = pickle.load(input_file)
+  except:
+    pass
+  if recompute:
+    recompute_caches()

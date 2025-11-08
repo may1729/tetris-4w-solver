@@ -1,13 +1,12 @@
 # minacode :oyes:
 import json
 from lib.combo_lib import get_best_next_combo_state
-from lib.board_lib import hash_board, save_transition_cache, load_transition_cache
+from lib.board_lib import hash_board, load_caches, save_caches
 
-tc = {}
 TC_FILE = "data/tc"
 
 try:
-    tc = load_transition_cache(TC_FILE)
+    load_caches(TC_FILE)
 except:
     pass
 # board queue hold vision foresight can180 upstack
@@ -36,7 +35,7 @@ def p_combo(line: str):
         queue = queue[1] + queue[0] + queue[2:]
     # print(f'{board} {queue}')
 
-    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, use_hold, should_upstack, tc)
+    get_best_next_combo_state(board_hash, hold + queue, foresight, can180, use_hold, should_upstack)
     # print(f'stored {o}')
     return;
 
@@ -46,7 +45,7 @@ def p_pc(line: str):
 while True:
     line = input()
     if line == "ex":
-        save_transition_cache(tc, TC_FILE)
+        save_caches(TC_FILE)
         print("ok")
     elif line.startswith("ren "):
         p_combo(line[4:])
